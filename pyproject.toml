@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "klv-test-videos"
+version = "0.1.0"
+description = "Generate test videos with KLV metadata streams for testing burnoutweb and KWIVER"
+authors = [{name = "Paul Hax"}]
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "klvdata>=0.0.3",
+    "opencv-python>=4.5.0",
+    "numpy>=1.13.0,<2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "black>=22.0.0",
+    "ruff>=0.0.250",
+]
+
+[project.scripts]
+generate-klv-video = "klv_test_videos.cli:main"
+
+[tool.setuptools]
+packages = ["klv_test_videos"]
+
+[tool.black]
+line-length = 100
+target-version = ['py38', 'py39', 'py310', 'py311']
+
+[tool.ruff]
+line-length = 100
+target-version = "py38"
+select = ["E", "F", "I", "N", "W"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
