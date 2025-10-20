@@ -26,6 +26,7 @@ gstreamer = [
 
 [project.scripts]
 generate-klv-video = "klv_test_videos.cli:main"
+modify-klv-video = "klv_test_videos.modify_cli:main"
 
 [tool.setuptools]
 packages = ["klv_test_videos"]

@@ -40,6 +40,8 @@ class KLVMetadataGenerator:
         """
         Create a KLV packet from a metadata dictionary.
 
+        If metadata contains '_raw_klv_packet', use it directly for pass-through.
+
         Args:
             metadata: Dictionary with metadata keys and values. Supported keys:
                 - version: UAS LS version (default: 1)
@@ -61,6 +63,12 @@ class KLVMetadataGenerator:
         Returns:
             Complete KLV packet as bytes
         """
+        # If raw packet exists, use it for pass-through (no modifications)
+        if "_raw_klv_packet" in metadata:
+            value_bytes = metadata["_raw_klv_packet"]
+            length_bytes = common.ber_encode(len(value_bytes))
+            return self.UAS_LS_KEY + length_bytes + value_bytes
+
         elements = []
 
         # 1. UAS LS Version Number (mandatory)
@@ -169,6 +177,22 @@ class KLVMetadataGenerator:
         if "platform_ground_speed" in metadata:
             elements.append(
                 misb0601.PlatformGroundSpeed(metadata["platform_ground_speed"])
+            )
+
+        # 14. Frame Center
+        if "frame_center_latitude" in metadata:
+            elements.append(
+                misb0601.FrameCenterLatitude(metadata["frame_center_latitude"])
+            )
+
+        if "frame_center_longitude" in metadata:
+            elements.append(
+                misb0601.FrameCenterLongitude(metadata["frame_center_longitude"])
+            )
+
+        if "frame_center_elevation" in metadata:
+            elements.append(
+                misb0601.FrameCenterElevation(metadata["frame_center_elevation"])
             )
 
         # Combine all elements

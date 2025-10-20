@@ -112,6 +112,78 @@ print(f"KLV file: {result['klv_path']}")
 print(f"Frames: {result['num_frames']}")
 ```
 
+## Modifying Existing Videos
+
+Modify KLV metadata in existing videos (like `sample_video.mpg`) while preserving original video frames.
+
+### CLI Usage
+
+```bash
+# Modify metadata using JSON file
+modify-klv-video input.mpg -o output.ts --overrides changes.json
+
+# Modify single field on command line
+modify-klv-video input.mpg -o output.ts --frame 5 --set latitude=37.5
+
+# Modify multiple frames and fields
+modify-klv-video input.mpg -o output.ts \
+  --frame 0 --set latitude=37.7 longitude=-122.4 \
+  --frame 10 --set altitude=2000 heading=180
+```
+
+**Overrides JSON format:**
+```json
+{
+  "0": {"latitude": 37.7749, "longitude": -122.4194},
+  "5": {"heading": 180.0},
+  "10": {"altitude": 2000.0, "pitch": -20.0}
+}
+```
+
+### Python API
+
+```python
+from klv_test_videos.video_modifier import modify_video_metadata
+
+# Define metadata changes for specific frames
+metadata_overrides = {
+    0: {"latitude": 37.7749, "longitude": -122.4194},
+    5: {"heading": 180.0, "pitch": -30.0},
+    10: {"altitude": 2000.0}
+}
+
+# Modify the video
+result = modify_video_metadata(
+    input_video_path='videos/sample_video.mpg',
+    output_video_path='videos/modified.ts',
+    metadata_overrides=metadata_overrides,
+    backend='gstreamer'
+)
+```
+
+**How it works:**
+- Extracts KLV stream from input video using FFmpeg
+- Parses KLV packets to extract existing metadata
+- Merges your overrides with original metadata (field-level merge)
+- Preserves original video frames (no re-encoding)
+- Generates new video with modified metadata
+
+**See also:** `examples/modify_sample_video.py` for a complete runnable example
+
+## Testing
+
+Run automated tests including round-trip validation:
+
+```bash
+pytest tests/test_roundtrip.py -v
+```
+
+Tests include:
+- Round-trip metadata preservation (extract and re-encode with no changes)
+- Frame count validation
+- Single field modification
+- Multiple frame modifications
+
 ## Supported Metadata Fields
 
 All optional (except `version`):
