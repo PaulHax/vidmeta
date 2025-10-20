@@ -11,14 +11,16 @@ Installation requirements:
 
 import threading
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 
 try:
     import gi
-    gi.require_version('Gst', '1.0')
-    from gi.repository import Gst, GLib
+
+    gi.require_version("Gst", "1.0")
+    from gi.repository import GLib, Gst
+
     GSTREAMER_AVAILABLE = True
 except (ImportError, ValueError) as e:
     GSTREAMER_AVAILABLE = False
@@ -58,7 +60,7 @@ class GStreamerKLVMuxer:
         width: int = 64,
         height: int = 64,
         fps: int = 30,
-        frame_generator: Optional[VideoFrameGenerator] = None
+        frame_generator: Optional[VideoFrameGenerator] = None,
     ) -> Dict[str, Any]:
         """
         Build video with KLV using GStreamer.
@@ -96,8 +98,8 @@ class GStreamerKLVMuxer:
         total_klv_bytes = sum(len(p) for p in klv_packets)
 
         # Save KLV to separate file
-        klv_output = Path(output_path).with_suffix('.klv')
-        with open(klv_output, 'wb') as f:
+        klv_output = Path(output_path).with_suffix(".klv")
+        with open(klv_output, "wb") as f:
             for packet in klv_packets:
                 f.write(packet)
 
@@ -120,15 +122,18 @@ class GStreamerKLVMuxer:
         output_path: str,
         width: int,
         height: int,
-        fps: int
+        fps: int,
     ) -> bool:
         """Build and run GStreamer pipeline."""
 
         # Build pipeline string - try different encoders
         # Configure for better seeking: all frames as keyframes
         encoders = [
-            ("openh264enc gop-size=1 ! video/x-h264,stream-format=byte-stream ! "
-             "h264parse config-interval=-1", None),  # Force all I-frames with gop-size=1
+            (
+                "openh264enc gop-size=1 ! video/x-h264,stream-format=byte-stream ! "
+                "h264parse config-interval=-1",
+                None,
+            ),  # Force all I-frames with gop-size=1
             ("theoraenc", None),  # Theora doesn't need parse
         ]
 
@@ -281,7 +286,7 @@ def build_klv_video_gstreamer(
     width: int = 64,
     height: int = 64,
     fps: int = 30,
-    frame_generator: Optional[VideoFrameGenerator] = None
+    frame_generator: Optional[VideoFrameGenerator] = None,
 ) -> Dict[str, Any]:
     """
     Build test video with KLV using GStreamer.
@@ -300,6 +305,4 @@ def build_klv_video_gstreamer(
         Dictionary with generation results
     """
     muxer = GStreamerKLVMuxer()
-    return muxer.build_video(
-        output_path, metadata_per_frame, width, height, fps, frame_generator
-    )
+    return muxer.build_video(output_path, metadata_per_frame, width, height, fps, frame_generator)
