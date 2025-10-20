@@ -21,6 +21,9 @@ dev = [
     "black>=22.0.0",
     "ruff>=0.0.250",
 ]
+gstreamer = [
+    "PyGObject<3.51.0",  # Requires system packages: gir1.2-gstreamer-1.0, gir1.2-gst-plugins-base-1.0, gstreamer1.0-plugins-bad
+]
 
 [project.scripts]
 generate-klv-video = "klv_test_videos.cli:main"

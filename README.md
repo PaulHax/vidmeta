@@ -4,10 +4,26 @@ Generate test videos with KLV metadata streams for testing burnoutweb and KWIVER
 
 ## Installation
 
+### Basic Installation (FFmpeg-based)
+
 ```bash
 cd klv-test-videos
 uv pip install -e .
 ```
+
+### Optional: GStreamer Support (Experimental)
+
+For experimental GStreamer-based KLV muxing with proper KLVA codec tags:
+
+```bash
+# Install system dependencies
+sudo apt-get install libgirepository1.0-dev gir1.2-gstreamer-1.0 gir1.2-gst-plugins-base-1.0 gstreamer1.0-plugins-bad
+
+# Install with GStreamer support
+uv pip install -e ".[gstreamer]"
+```
+
+**Note**: GStreamer implementation is experimental and not required for normal use.
 
 ## CLI Usage
 
