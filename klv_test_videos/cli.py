@@ -74,6 +74,14 @@ Examples:
         help='Frames per second (default: 30)'
     )
 
+    parser.add_argument(
+        '--backend',
+        type=str,
+        choices=['gstreamer', 'ffmpeg'],
+        default='gstreamer',
+        help='Muxing backend: gstreamer (proper KLVA tags, default) or ffmpeg (basic)'
+    )
+
     args = parser.parse_args(argv)
 
     # List scenarios
@@ -104,7 +112,8 @@ Examples:
                 metadata_per_frame=metadata,
                 width=args.width,
                 height=args.height,
-                fps=args.fps
+                fps=args.fps,
+                backend=args.backend
             )
 
             print(f"  ✓ Generated: {result['video_path']}")
@@ -142,7 +151,8 @@ Examples:
         metadata_per_frame=metadata,
         width=args.width,
         height=args.height,
-        fps=args.fps
+        fps=args.fps,
+        backend=args.backend
     )
 
     if result['success']:

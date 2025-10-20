@@ -32,8 +32,11 @@ uv pip install -e ".[gstreamer]"
 ## CLI Usage
 
 ```bash
-# Generate video matching sample_video.mpg frame 812
+# Generate video matching sample_video.mpg frame 812 (uses GStreamer by default)
 generate-klv-video sample_video
+
+# Use FFmpeg backend instead
+generate-klv-video sample_video --backend ffmpeg
 
 # List available scenarios
 generate-klv-video --list
@@ -42,7 +45,10 @@ generate-klv-video --list
 generate-klv-video --all
 
 # Custom output and size
-generate-klv-video moving --output my_test.mpg --width 128 --height 128
+generate-klv-video moving --output videos/my_test.ts --width 256 --height 256
+
+# Specify backend explicitly
+generate-klv-video moving --backend gstreamer --width 256 --height 256
 ```
 
 Available scenarios: `sample_video`, `stationary`, `moving`, `high_altitude`, `minimal`
@@ -55,13 +61,11 @@ Each generates:
 
 ## Python API
 
-### GStreamer API (Recommended)
-
-Self-contained example for generating KLV test videos with proper KLVA codec tags (see `examples/example_gstreamer.py` for complete runnable example):
+Unified API with backend selection (see `examples/example_gstreamer.py` for complete runnable example):
 
 ```python
 from datetime import datetime, timezone
-from klv_test_videos.gstreamer_muxer import build_klv_video_gstreamer
+from klv_test_videos.video_builder import build_klv_video
 
 # Define metadata for each frame
 metadata = [
@@ -83,50 +87,29 @@ metadata = [
     # ... one dict per frame (add more frames as needed)
 ]
 
-# Generate video with GStreamer
-result = build_klv_video_gstreamer(
-    output_path='test.ts',
+# Generate video with GStreamer backend (default, recommended)
+result = build_klv_video(
+    output_path='videos/test.ts',
     metadata_per_frame=metadata,
     width=256,
     height=256,
-    fps=30
+    fps=30,
+    backend='gstreamer'  # Default; provides proper KLVA tags, checksums, and seeking
+)
+
+# Or use FFmpeg backend for basic muxing
+result = build_klv_video(
+    output_path='videos/test.mpg',
+    metadata_per_frame=metadata,
+    width=256,
+    height=256,
+    fps=30,
+    backend='ffmpeg'  # Basic muxing, generic codec tags
 )
 
 print(f"Video: {result['video_path']}")
 print(f"KLV file: {result['klv_path']}")
 print(f"Frames: {result['num_frames']}")
-```
-
-### FFmpeg API (Basic)
-
-```python
-from datetime import datetime, timezone
-from klv_test_videos.video_builder import build_klv_video
-
-metadata = [
-    {
-        'latitude': 37.7749,
-        'longitude': -122.4194,
-        'altitude': 500.0,
-        'heading': 45.0,
-        'pitch': -15.0,
-        'roll': 0.0,
-        'horizontal_fov': 60.0,
-        'vertical_fov': 45.0,
-        'slant_range': 5000.0,
-        'mission_id': 'TEST_001',
-        'timestamp': datetime.now(timezone.utc),
-    },
-    # ... one dict per frame
-]
-
-result = build_klv_video(
-    output_path='test.mpg',
-    metadata_per_frame=metadata,
-    width=64,
-    height=64,
-    fps=30
-)
 ```
 
 ## Supported Metadata Fields

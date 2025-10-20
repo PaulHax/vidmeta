@@ -238,12 +238,13 @@ def build_klv_video(
     width: int = 64,
     height: int = 64,
     fps: int = 30,
-    frame_generator: Optional[VideoFrameGenerator] = None
+    frame_generator: Optional[VideoFrameGenerator] = None,
+    backend: str = "gstreamer"
 ) -> Dict[str, Any]:
     """
     Build a test video with KLV metadata from a list of metadata dictionaries.
 
-    This is the low-level function that takes explicit metadata for each frame.
+    Unified API with backend selection.
 
     Args:
         output_path: Output video file path (.ts for MPEG-TS format)
@@ -252,6 +253,7 @@ def build_klv_video(
         height: Frame height in pixels (default: 64)
         fps: Frames per second (default: 30)
         frame_generator: Optional custom frame generator
+        backend: Muxing backend - "gstreamer" (default) or "ffmpeg"
 
     Returns:
         Dictionary with generation results:
@@ -266,8 +268,23 @@ def build_klv_video(
         ...     {"latitude": 37.77, "longitude": -122.42, "altitude": 500, "heading": 45},
         ...     {"latitude": 37.78, "longitude": -122.41, "altitude": 510, "heading": 50},
         ... ]
-        >>> result = build_klv_video("test.ts", metadata)
+        >>> result = build_klv_video("test.ts", metadata, backend="gstreamer")
     """
+    if backend == "gstreamer":
+        try:
+            from .gstreamer_muxer import build_klv_video_gstreamer
+            return build_klv_video_gstreamer(
+                output_path, metadata_per_frame, width, height, fps, frame_generator
+            )
+        except ImportError as e:
+            print(f"GStreamer backend not available: {e}")
+            print("Falling back to FFmpeg backend...")
+            backend = "ffmpeg"
+
+    if backend != "ffmpeg":
+        raise ValueError(f"Unknown backend: {backend}. Use 'gstreamer' or 'ffmpeg'")
+
+    # FFmpeg backend implementation
     num_frames = len(metadata_per_frame)
 
     if frame_generator is None:

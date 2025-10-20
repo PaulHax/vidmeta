@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Self-contained example for generating KLV test videos with GStreamer.
+Self-contained example for generating KLV test videos.
 
 This example shows how to create a video with KLV metadata from a dictionary
 of key-value pairs. The generated video will have:
@@ -10,7 +10,7 @@ of key-value pairs. The generated video will have:
 """
 
 from datetime import datetime, timezone
-from klv_test_videos.gstreamer_muxer import build_klv_video_gstreamer
+from klv_test_videos.video_builder import build_klv_video
 
 
 def main():
@@ -76,13 +76,14 @@ def main():
     print(f"Generating video with {len(metadata_per_frame)} frames...")
     print()
 
-    # Generate video with GStreamer
-    result = build_klv_video_gstreamer(
+    # Generate video (uses GStreamer backend by default)
+    result = build_klv_video(
         output_path='videos/example_output.ts',
         metadata_per_frame=metadata_per_frame,
         width=256,    # Frame width in pixels
         height=256,   # Frame height in pixels
-        fps=30        # Frames per second
+        fps=30,       # Frames per second
+        backend='gstreamer'  # Or 'ffmpeg' for basic muxing
     )
 
     # Print results
