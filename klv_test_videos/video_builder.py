@@ -164,17 +164,15 @@ class KLVMetadataGenerator:
         return packet
 
     def _calculate_checksum(self, data: bytes) -> int:
-        """Calculate CRC-16-CCITT checksum for MISB ST0601."""
-        crc = 0
-        for byte in data:
-            crc ^= byte << 8
-            for _ in range(8):
-                if crc & 0x8000:
-                    crc = (crc << 1) ^ 0x1021
-                else:
-                    crc = crc << 1
-                crc &= 0xFFFF
-        return crc
+        """Calculate running sum 16 checksum for MISB ST0601."""
+        checksum = 0
+        for i, byte in enumerate(data):
+            if i % 2 == 0:
+                checksum += byte << 8
+            else:
+                checksum += byte
+            checksum &= 0xFFFF
+        return checksum
 
 
 class VideoFrameGenerator:
