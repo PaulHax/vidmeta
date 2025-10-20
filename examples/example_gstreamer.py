@@ -78,7 +78,7 @@ def main():
 
     # Generate video with GStreamer
     result = build_klv_video_gstreamer(
-        output_path='example_output.ts',
+        output_path='videos/example_output.ts',
         metadata_per_frame=metadata_per_frame,
         width=256,    # Frame width in pixels
         height=256,   # Frame height in pixels

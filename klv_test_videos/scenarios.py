@@ -194,31 +194,31 @@ SCENARIOS = {
         'name': 'Sample Video Match',
         'description': '10 frames matching sample_video.mpg middle frames (frame 812)',
         'generator': sample_video_middle_metadata,
-        'default_output': 'test_sample_match.mpg',
+        'default_output': 'videos/test_sample_match.mpg',
     },
     'stationary': {
         'name': 'Stationary Camera',
         'description': 'Fixed camera position and orientation',
         'generator': stationary_camera,
-        'default_output': 'test_stationary.mpg',
+        'default_output': 'videos/test_stationary.mpg',
     },
     'moving': {
         'name': 'Moving Camera Path',
         'description': 'Camera moving along a defined path',
         'generator': moving_camera_path,
-        'default_output': 'test_moving.mpg',
+        'default_output': 'videos/test_moving.mpg',
     },
     'high_altitude': {
         'name': 'High Altitude Survey',
         'description': 'High-altitude camera with downward view',
         'generator': high_altitude_survey,
-        'default_output': 'test_high_alt.mpg',
+        'default_output': 'videos/test_high_alt.mpg',
     },
     'minimal': {
         'name': 'Minimal Metadata',
         'description': 'Only mandatory KLV fields',
         'generator': minimal_metadata,
-        'default_output': 'test_minimal.mpg',
+        'default_output': 'videos/test_minimal.mpg',
     },
 }
 
