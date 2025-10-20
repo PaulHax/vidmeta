@@ -125,9 +125,10 @@ class GStreamerKLVMuxer:
         """Build and run GStreamer pipeline."""
 
         # Build pipeline string - try different encoders
-        # Try openh264enc (from gstreamer-plugins-bad), fallback to theoraenc
+        # Configure for better seeking: all frames as keyframes
         encoders = [
-            ("openh264enc", "h264parse"),
+            ("openh264enc ! video/x-h264,stream-format=byte-stream ! "
+             "h264parse config-interval=-1", None),  # Force all I-frames
             ("theoraenc", None),  # Theora doesn't need parse
         ]
 

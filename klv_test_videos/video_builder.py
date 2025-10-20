@@ -149,11 +149,32 @@ class KLVMetadataGenerator:
             else:
                 value_bytes += bytes(elem)
 
+        # Add checksum (MISB ST0601 tag 1)
+        # Calculate CRC-16-CCITT over value_bytes
+        checksum = self._calculate_checksum(value_bytes)
+        checksum_key = b'\x01'
+        checksum_value = checksum.to_bytes(2, byteorder='big')
+        checksum_length = common.ber_encode(len(checksum_value))
+        value_bytes += checksum_key + checksum_length + checksum_value
+
         # Create complete packet: Key + Length + Value
         length_bytes = common.ber_encode(len(value_bytes))
         packet = self.UAS_LS_KEY + length_bytes + value_bytes
 
         return packet
+
+    def _calculate_checksum(self, data: bytes) -> int:
+        """Calculate CRC-16-CCITT checksum for MISB ST0601."""
+        crc = 0
+        for byte in data:
+            crc ^= byte << 8
+            for _ in range(8):
+                if crc & 0x8000:
+                    crc = (crc << 1) ^ 0x1021
+                else:
+                    crc = crc << 1
+                crc &= 0xFFFF
+        return crc
 
 
 class VideoFrameGenerator:
