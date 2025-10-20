@@ -234,7 +234,9 @@ SCENARIOS = {
 def get_scenario(name: str) -> Dict[str, Any]:
     """Get scenario by name."""
     if name not in SCENARIOS:
-        raise ValueError(f"Unknown scenario: {name}. Available: {list(SCENARIOS.keys())}")
+        raise ValueError(
+            f"Unknown scenario: {name}. Available: {list(SCENARIOS.keys())}"
+        )
     return SCENARIOS[name]
 
 

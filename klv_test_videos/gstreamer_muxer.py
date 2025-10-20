@@ -104,7 +104,9 @@ class GStreamerKLVMuxer:
                 f.write(packet)
 
         # Build and run pipeline
-        success = self._run_pipeline(frames, klv_packets, output_path, width, height, fps)
+        success = self._run_pipeline(
+            frames, klv_packets, output_path, width, height, fps
+        )
 
         return {
             "success": success,
@@ -305,4 +307,6 @@ def build_klv_video_gstreamer(
         Dictionary with generation results
     """
     muxer = GStreamerKLVMuxer()
-    return muxer.build_video(output_path, metadata_per_frame, width, height, fps, frame_generator)
+    return muxer.build_video(
+        output_path, metadata_per_frame, width, height, fps, frame_generator
+    )

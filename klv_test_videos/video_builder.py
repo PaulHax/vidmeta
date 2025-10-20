@@ -72,7 +72,9 @@ class KLVMetadataGenerator:
             timestamp = metadata["timestamp"]
             if isinstance(timestamp, (int, float)):
                 # Convert microseconds to datetime
-                timestamp = datetime.fromtimestamp(timestamp / 1_000_000, tz=timezone.utc)
+                timestamp = datetime.fromtimestamp(
+                    timestamp / 1_000_000, tz=timezone.utc
+                )
 
             # Manually encode (klvdata constructors are for parsing)
             timestamp_bytes = common.datetime_to_bytes(timestamp)
@@ -86,7 +88,9 @@ class KLVMetadataGenerator:
 
         # 4. Platform Designation
         if "platform_designation" in metadata:
-            elements.append(misb0601.PlatformDesignation(metadata["platform_designation"]))
+            elements.append(
+                misb0601.PlatformDesignation(metadata["platform_designation"])
+            )
 
         # 5. Platform Call Sign
         if "platform_call_sign" in metadata:
@@ -94,7 +98,9 @@ class KLVMetadataGenerator:
 
         # 6. Platform Tail Number
         if "platform_tail_number" in metadata:
-            elements.append(misb0601.PlatformTailNumber(metadata["platform_tail_number"]))
+            elements.append(
+                misb0601.PlatformTailNumber(metadata["platform_tail_number"])
+            )
 
         # 7. Sensor Name
         if "sensor_name" in metadata:
@@ -128,18 +134,26 @@ class KLVMetadataGenerator:
 
         if "sensor_relative_elevation" in metadata:
             elements.append(
-                misb0601.SensorRelativeElevationAngle(metadata["sensor_relative_elevation"])
+                misb0601.SensorRelativeElevationAngle(
+                    metadata["sensor_relative_elevation"]
+                )
             )
 
         if "sensor_relative_roll" in metadata:
-            elements.append(misb0601.SensorRelativeRollAngle(metadata["sensor_relative_roll"]))
+            elements.append(
+                misb0601.SensorRelativeRollAngle(metadata["sensor_relative_roll"])
+            )
 
         # 11. Field of View
         if "horizontal_fov" in metadata:
-            elements.append(misb0601.SensorHorizontalFieldOfView(metadata["horizontal_fov"]))
+            elements.append(
+                misb0601.SensorHorizontalFieldOfView(metadata["horizontal_fov"])
+            )
 
         if "vertical_fov" in metadata:
-            elements.append(misb0601.SensorVerticalFieldOfView(metadata["vertical_fov"]))
+            elements.append(
+                misb0601.SensorVerticalFieldOfView(metadata["vertical_fov"])
+            )
 
         # 12. Slant Range
         if "slant_range" in metadata:
@@ -153,7 +167,9 @@ class KLVMetadataGenerator:
             elements.append(misb0601.GroundRange(metadata["ground_range"]))
 
         if "platform_ground_speed" in metadata:
-            elements.append(misb0601.PlatformGroundSpeed(metadata["platform_ground_speed"]))
+            elements.append(
+                misb0601.PlatformGroundSpeed(metadata["platform_ground_speed"])
+            )
 
         # Combine all elements
         value_bytes = b""
@@ -219,7 +235,9 @@ class VideoFrameGenerator:
         """
         # Create frame with changing background color
         hue = int((frame_num / max(total_frames, 1)) * 179)  # HSV hue: 0-179
-        frame_hsv = np.full((self.height, self.width, 3), [hue, 200, 200], dtype=np.uint8)
+        frame_hsv = np.full(
+            (self.height, self.width, 3), [hue, 200, 200], dtype=np.uint8
+        )
         frame = cv2.cvtColor(frame_hsv, cv2.COLOR_HSV2BGR)
 
         # Add frame number or custom text
@@ -234,14 +252,25 @@ class VideoFrameGenerator:
         text_y = (self.height + text_size[1]) // 2
 
         cv2.putText(
-            frame, text, (text_x, text_y), font, font_scale, (255, 255, 255), thickness, cv2.LINE_AA
+            frame,
+            text,
+            (text_x, text_y),
+            font,
+            font_scale,
+            (255, 255, 255),
+            thickness,
+            cv2.LINE_AA,
         )
 
         # Add corner markers
         marker_size = max(2, self.width // 20)
         cv2.circle(frame, (5, 5), marker_size, (0, 255, 0), -1)  # Top-left
-        cv2.circle(frame, (self.width - 5, 5), marker_size, (0, 0, 255), -1)  # Top-right
-        cv2.circle(frame, (5, self.height - 5), marker_size, (255, 0, 0), -1)  # Bottom-left
+        cv2.circle(
+            frame, (self.width - 5, 5), marker_size, (0, 0, 255), -1
+        )  # Top-right
+        cv2.circle(
+            frame, (5, self.height - 5), marker_size, (255, 0, 0), -1
+        )  # Bottom-left
         cv2.circle(
             frame, (self.width - 5, self.height - 5), marker_size, (255, 255, 0), -1
         )  # Bottom-right

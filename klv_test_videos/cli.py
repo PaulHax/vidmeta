@@ -30,24 +30,37 @@ Examples:
     )
 
     parser.add_argument(
-        "scenario", nargs="?", help="Scenario name (use --list to see available scenarios)"
+        "scenario",
+        nargs="?",
+        help="Scenario name (use --list to see available scenarios)",
     )
 
     parser.add_argument(
-        "-o", "--output", help="Output video file path (default: scenario-specific name)", type=str
+        "-o",
+        "--output",
+        help="Output video file path (default: scenario-specific name)",
+        type=str,
     )
 
-    parser.add_argument("--list", action="store_true", help="List all available scenarios and exit")
+    parser.add_argument(
+        "--list", action="store_true", help="List all available scenarios and exit"
+    )
 
-    parser.add_argument("--all", action="store_true", help="Generate all available scenarios")
+    parser.add_argument(
+        "--all", action="store_true", help="Generate all available scenarios"
+    )
 
-    parser.add_argument("--width", type=int, default=64, help="Frame width in pixels (default: 64)")
+    parser.add_argument(
+        "--width", type=int, default=64, help="Frame width in pixels (default: 64)"
+    )
 
     parser.add_argument(
         "--height", type=int, default=64, help="Frame height in pixels (default: 64)"
     )
 
-    parser.add_argument("--fps", type=int, default=30, help="Frames per second (default: 30)")
+    parser.add_argument(
+        "--fps", type=int, default=30, help="Frames per second (default: 30)"
+    )
 
     parser.add_argument(
         "--backend",
