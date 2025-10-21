@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from klv_test_videos.video_modifier import modify_video_metadata, parse_klv_file
+from kwiver_testdata.video_modifier import modify_video_metadata, parse_klv_file
 
 
 @pytest.fixture(scope="module")

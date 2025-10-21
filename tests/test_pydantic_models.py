@@ -2,14 +2,14 @@
 
 from datetime import datetime
 
-from klv_test_videos.models import (
+from kwiver_testdata.models import (
     KLVMetadata,
     PlatformMetadata,
     SensorMetadata,
     FrameMetadata,
     ParsedKLVPacket,
 )
-from klv_test_videos.klv_converter import (
+from kwiver_testdata.klv_converter import (
     flat_dict_to_pydantic,
     pydantic_to_flat_dict,
 )

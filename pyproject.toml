@@ -26,11 +26,11 @@ gstreamer = [
 ]
 
 [project.scripts]
-generate-klv-video = "klv_test_videos.cli:main"
-modify-klv-video = "klv_test_videos.modify_cli:main"
+generate-klv-video = "kwiver_testdata.cli:main"
+modify-klv-video = "kwiver_testdata.modify_cli:main"
 
 [tool.setuptools]
-packages = ["klv_test_videos"]
+packages = ["kwiver_testdata"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

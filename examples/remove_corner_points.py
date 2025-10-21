@@ -97,12 +97,12 @@ def main():
     print()
 
     # Use the video modifier with a custom pass-through
-    from klv_test_videos.video_modifier import (
+    from kwiver_testdata.video_modifier import (
         extract_klv_stream_ffmpeg,
         parse_klv_file,
         extract_video_frames,
     )
-    from klv_test_videos.video_builder import build_klv_video, VideoFrameGenerator
+    from kwiver_testdata.video_builder import build_klv_video, VideoFrameGenerator
     import cv2
 
     # Extract KLV
