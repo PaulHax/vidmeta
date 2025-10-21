@@ -3,7 +3,7 @@ requires = ["setuptools>=45", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "klv-test-videos"
+name = "klvhax"
 version = "0.1.0"
 description = "Generate test videos with KLV metadata streams for testing burnoutweb and KWIVER"
 authors = [{name = "Paul Hax"}]

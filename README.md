@@ -1,4 +1,4 @@
-# KLV Test Videos
+# klvhax
 
 Generate test videos with KLV metadata streams for testing burnoutweb and KWIVER.
 
@@ -7,7 +7,7 @@ Generate test videos with KLV metadata streams for testing burnoutweb and KWIVER
 ### Basic Installation (FFmpeg-based)
 
 ```bash
-cd klv-test-videos
+cd klvhax
 uv pip install -e .
 ```
 
