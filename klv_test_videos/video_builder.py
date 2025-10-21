@@ -203,6 +203,13 @@ class KLVMetadataGenerator:
             else:
                 value_bytes += bytes(elem)
 
+        # Add unknown tags if present (preserves fields we don't explicitly handle)
+        if "_unknown_klv_tags" in metadata:
+            unknown_tags = metadata["_unknown_klv_tags"]
+            for tag_hex, tag_bytes in unknown_tags.items():
+                # tag_bytes already includes key+length+value
+                value_bytes += tag_bytes
+
         # Add checksum (MISB ST0601 tag 1)
         # Calculate CRC-16-CCITT over value_bytes
         checksum = self._calculate_checksum(value_bytes)

@@ -2,111 +2,39 @@
 
 import subprocess
 import tempfile
-from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Tuple
 
 import cv2
 import numpy as np
 
-try:
-    from klvdata import misb0601
-
-    KLVDATA_AVAILABLE = True
-except ImportError:
-    KLVDATA_AVAILABLE = False
-
 from .video_builder import build_klv_video, VideoFrameGenerator
+from .klv_converter import parse_klv_packet_to_pydantic, pydantic_to_flat_dict
 
 
-def parse_klv_packet(packet: bytes) -> Dict[str, Any]:
+def parse_klv_packet(packet: bytes) -> Tuple[Dict[str, Any], bytes, Dict[str, bytes]]:
     """
     Parse a KLV packet into a metadata dictionary.
+
+    This is a backward-compatible wrapper around the new Pydantic-based parsing.
+    For new code, consider using parse_klv_packet_to_pydantic() directly.
 
     Args:
         packet: Raw KLV packet bytes
 
     Returns:
-        Dictionary with metadata fields
+        Tuple of (metadata_dict, raw_packet, unknown_tags) where:
+        - metadata_dict contains flat keys for backward compatibility
+        - raw_packet is the original bytes
+        - unknown_tags is a dict of {tag_hex: tag_bytes} for preserving unknown fields
     """
-    if not KLVDATA_AVAILABLE:
-        raise ImportError("klvdata library required for parsing KLV packets")
+    # Use new Pydantic-based parsing
+    parsed = parse_klv_packet_to_pydantic(packet)
 
-    # Parse using klvdata
-    uas_set = misb0601.UASLocalMetadataSet(packet)
-    metadata_dict = uas_set.MetadataList()
+    # Convert to flat dict for backward compatibility, extracting unknown tags
+    flat_dict, raw_packet, unknown_tags = pydantic_to_flat_dict(parsed)
 
-    # Convert klvdata metadata dict to our dict format
-    # MetadataList() returns OrderedDict with {tag_num: (name, long_name, unit, value_str)}
-    metadata = {}
-
-    # Store the raw packet for pass-through of all fields
-    metadata["_raw_klv_packet"] = packet
-
-    for tag_num, tag_info in metadata_dict.items():
-        name = tag_info[0]  # First element is the name
-        value_str = tag_info[3]  # Fourth element is the value as string
-
-        # Map klvdata names to our metadata keys
-        # Most values are numeric strings, some are text
-        if name == "Precision Time Stamp" or name == "Event Start Time - UTC":
-            # Parse timestamp string (format: ISO 8601 datetime string)
-            try:
-                # klvdata returns ISO format like '2015-10-07 07:18:02.380305+00:00'
-                metadata["timestamp"] = datetime.fromisoformat(value_str)
-            except (ValueError, OSError):
-                # If parsing fails, keep as string
-                metadata["timestamp"] = value_str
-        elif name == "Mission ID":
-            metadata["mission_id"] = value_str
-        elif name == "Platform Designation":
-            metadata["platform_designation"] = value_str
-        elif name == "Platform Call Sign":
-            metadata["platform_call_sign"] = value_str
-        elif name == "Platform Tail Number":
-            metadata["platform_tail_number"] = value_str
-        elif name == "Image Source Sensor":
-            metadata["sensor_name"] = value_str
-        elif name == "Sensor Latitude":
-            metadata["latitude"] = float(value_str)
-        elif name == "Sensor Longitude":
-            metadata["longitude"] = float(value_str)
-        elif name == "Sensor True Altitude":
-            metadata["altitude"] = float(value_str)
-        elif name == "Platform Heading Angle":
-            metadata["heading"] = float(value_str)
-        elif name == "Platform Pitch Angle":
-            metadata["pitch"] = float(value_str)
-        elif name == "Platform Roll Angle":
-            metadata["roll"] = float(value_str)
-        elif name == "Sensor Relative Azimuth Angle":
-            metadata["sensor_relative_azimuth"] = float(value_str)
-        elif name == "Sensor Relative Elevation Angle":
-            metadata["sensor_relative_elevation"] = float(value_str)
-        elif name == "Sensor Relative Roll Angle":
-            metadata["sensor_relative_roll"] = float(value_str)
-        elif name == "Sensor Horizontal Field of View":
-            metadata["horizontal_fov"] = float(value_str)
-        elif name == "Sensor Vertical Field of View":
-            metadata["vertical_fov"] = float(value_str)
-        elif name == "Slant Range":
-            metadata["slant_range"] = float(value_str)
-        elif name == "Target Width":
-            metadata["target_width"] = float(value_str)
-        elif name == "Ground Range":
-            metadata["ground_range"] = float(value_str)
-        elif name == "Platform Ground Speed":
-            metadata["platform_ground_speed"] = float(value_str)
-        elif name == "Frame Center Latitude":
-            metadata["frame_center_latitude"] = float(value_str)
-        elif name == "Frame Center Longitude":
-            metadata["frame_center_longitude"] = float(value_str)
-        elif name == "Frame Center Elevation":
-            metadata["frame_center_elevation"] = float(value_str)
-        elif name == "UAS Datalink LS Version Number":
-            metadata["version"] = int(float(value_str))
-
-    return metadata
+    return flat_dict, raw_packet, unknown_tags
 
 
 def extract_klv_stream_ffmpeg(video_path: str, output_path: str) -> None:
@@ -138,7 +66,9 @@ def extract_klv_stream_ffmpeg(video_path: str, output_path: str) -> None:
         raise RuntimeError(f"FFmpeg failed to extract KLV stream: {result.stderr}")
 
 
-def parse_klv_file(klv_path: str) -> Dict[int, Dict[str, Any]]:
+def parse_klv_file(
+    klv_path: str,
+) -> Dict[int, Tuple[Dict[str, Any], bytes, Dict[str, bytes]]]:
     """
     Parse KLV packets from a file into frame-indexed metadata.
 
@@ -146,7 +76,7 @@ def parse_klv_file(klv_path: str) -> Dict[int, Dict[str, Any]]:
         klv_path: Path to file containing raw KLV packets
 
     Returns:
-        Dictionary mapping frame numbers to metadata dicts
+        Dictionary mapping frame numbers to (metadata_dict, raw_packet, unknown_tags) tuples
     """
     metadata_per_frame = {}
 
@@ -211,12 +141,9 @@ def parse_klv_file(klv_path: str) -> Dict[int, Dict[str, Any]]:
         packet_value = klv_data[offset : offset + length]
 
         # Parse packet
-        try:
-            metadata = parse_klv_packet(packet_value)
-            metadata_per_frame[frame_num] = metadata
-            frame_num += 1
-        except Exception as e:
-            print(f"Warning: Failed to parse packet at frame {frame_num}: {e}")
+        metadata_dict, raw_packet, unknown_tags = parse_klv_packet(packet_value)
+        metadata_per_frame[frame_num] = (metadata_dict, raw_packet, unknown_tags)
+        frame_num += 1
 
         offset += length
 
@@ -317,20 +244,52 @@ def modify_video_metadata(
     merged_metadata = []
 
     for frame_num in range(num_frames):
-        # Start with original metadata or empty dict
-        frame_meta = original_metadata.get(frame_num, {}).copy()
+        # Get original metadata tuple (metadata_dict, raw_packet, unknown_tags)
+        original_tuple = original_metadata.get(frame_num, ({}, None, {}))
+
+        # Unpack tuple - handle both old (2-element) and new (3-element) formats
+        if isinstance(original_tuple, tuple):
+            if len(original_tuple) == 3:
+                frame_meta, raw_packet, unknown_tags = original_tuple
+            elif len(original_tuple) == 2:
+                # Backward compatibility: old (metadata_dict, raw_packet) format
+                frame_meta, raw_packet = original_tuple
+                unknown_tags = {}
+            else:
+                frame_meta = original_tuple
+                raw_packet = None
+                unknown_tags = {}
+        else:
+            # Very old format: just a dict
+            frame_meta = original_tuple
+            raw_packet = None
+            unknown_tags = {}
+
+        # Make a copy to avoid modifying original
+        frame_meta = frame_meta.copy()
 
         # Merge overrides if present
         if frame_num in metadata_overrides:
-            # If we have a raw packet and overrides, we need to decode, modify, re-encode
-            # For now, remove the raw packet so it gets reconstructed with overrides
+            # When fields are modified, we can't use the raw packet anymore
+            # But we CAN preserve unknown tags by storing them separately
             if "_raw_klv_packet" in frame_meta:
                 del frame_meta["_raw_klv_packet"]
+
+            # Store unknown tags so video_builder can include them when re-encoding
+            if unknown_tags:
+                frame_meta["_unknown_klv_tags"] = unknown_tags
 
             frame_meta.update(metadata_overrides[frame_num])
             print(
                 f"  Frame {frame_num}: Updated {list(metadata_overrides[frame_num].keys())}"
             )
+            if unknown_tags:
+                print(
+                    f"  Frame {frame_num}: Preserving {len(unknown_tags)} unknown KLV tags"
+                )
+        elif raw_packet is not None:
+            # No modifications - preserve raw packet for complete pass-through
+            frame_meta["_raw_klv_packet"] = raw_packet
 
         merged_metadata.append(frame_meta)
 

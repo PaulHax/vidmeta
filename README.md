@@ -24,6 +24,7 @@ uv pip install -e ".[gstreamer]"
 ```
 
 **Why use GStreamer?**
+
 - Proper KLVA codec tags (vs generic bin_data from FFmpeg)
 - Correct running sum 16 checksums compatible with KWIVER
 - All I-frames for full seeking support (forward and backward)
@@ -54,6 +55,7 @@ generate-klv-video moving --backend gstreamer --width 256 --height 256
 Available scenarios: `sample_video`, `stationary`, `moving`, `high_altitude`, `minimal`
 
 Each generates:
+
 - `.mpg` file - MPEG-TS video with embedded KLV data stream
 - `.klv` file - Raw KLV packets (use this for KWIVER testing)
 
@@ -132,11 +134,12 @@ modify-klv-video input.mpg -o output.ts \
 ```
 
 **Overrides JSON format:**
+
 ```json
 {
-  "0": {"latitude": 37.7749, "longitude": -122.4194},
-  "5": {"heading": 180.0},
-  "10": {"altitude": 2000.0, "pitch": -20.0}
+  "0": { "latitude": 37.7749, "longitude": -122.4194 },
+  "5": { "heading": 180.0 },
+  "10": { "altitude": 2000.0, "pitch": -20.0 }
 }
 ```
 
@@ -162,6 +165,7 @@ result = modify_video_metadata(
 ```
 
 **How it works:**
+
 - Extracts KLV stream from input video using FFmpeg
 - Parses KLV packets to extract existing metadata
 - Merges your overrides with original metadata (field-level merge)
@@ -179,6 +183,7 @@ pytest tests/test_roundtrip.py -v
 ```
 
 Tests include:
+
 - Round-trip metadata preservation (extract and re-encode with no changes)
 - Frame count validation
 - Single field modification
@@ -195,3 +200,17 @@ All optional (except `version`):
 **Range**: `slant_range`, `ground_range`, `target_width`
 **Identification**: `mission_id`, `platform_call_sign`, `platform_designation`, `platform_tail_number`, `sensor_name`
 **Other**: `platform_ground_speed`, `timestamp`, `version`
+
+## Test Video Resources
+
+Example videos with KLV metadata for testing:
+
+- [Day Flight.mpg](http://samples.ffmpeg.org/MPEG2/mpegts-klv/Day%20Flight.mpg) - MPEG-TS with embedded KLV metadata from FFmpeg samples
+
+### TeleSculptor Example Videos (VIRAT Dataset)
+
+From the [TeleSculptor examples](https://github.com/Kitware/TeleSculptor/tree/master/examples):
+
+- [09172008flight1tape3_2.mpg](https://data.kitware.com/#item/5ef11b419014a6d84ed53971) - The aircraft makes about one complete orbit over a site in Fort A.P. Hill, Virginia. The stare point remains fixed on the center of the scene and the field of view is quite narrow. The scene is composed primarily of buildings and vehicles.
+
+- [09152008flight2tape2_4.mpg](https://data.kitware.com/#item/56f580488d777f753209c72f) - This is video of the same region but taken in a different style. The field of view is much larger and the stare point moves substantially. In addition to the buildings and vehicles which are the focus of the other clip, this video includes wide shots of roads and vegetation.

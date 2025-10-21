@@ -77,8 +77,30 @@ def test_roundtrip_preserves_metadata(sample_video, tmp_path):
         if frame_num >= len(roundtrip_metadata):
             continue
 
-        orig = original_metadata.get(frame_num, {})
-        trip = roundtrip_metadata.get(frame_num, {})
+        # Unpack tuples (metadata_dict, raw_packet, unknown_tags)
+        orig_tuple = original_metadata.get(frame_num, ({}, None, {}))
+        trip_tuple = roundtrip_metadata.get(frame_num, ({}, None, {}))
+
+        # Extract just the metadata dicts
+        if isinstance(orig_tuple, tuple):
+            if len(orig_tuple) >= 3:
+                orig, _, _ = orig_tuple[0], orig_tuple[1], orig_tuple[2]
+            elif len(orig_tuple) == 2:
+                orig, _ = orig_tuple
+            else:
+                orig = orig_tuple[0]
+        else:
+            orig = orig_tuple
+
+        if isinstance(trip_tuple, tuple):
+            if len(trip_tuple) >= 3:
+                trip, _, _ = trip_tuple[0], trip_tuple[1], trip_tuple[2]
+            elif len(trip_tuple) == 2:
+                trip, _ = trip_tuple
+            else:
+                trip = trip_tuple[0]
+        else:
+            trip = trip_tuple
 
         # Check all keys are preserved
         assert orig.keys() == trip.keys(), f"Frame {frame_num}: key mismatch"
@@ -165,7 +187,18 @@ def test_modification_with_overrides(sample_video, tmp_path):
     output_metadata = parse_klv_file(result["klv_path"])
 
     # Check frame 0 has the new values
-    frame_0 = output_metadata[0]
+    # Unpack tuple (metadata_dict, raw_packet, unknown_tags)
+    frame_0_tuple = output_metadata[0]
+    if isinstance(frame_0_tuple, tuple):
+        if len(frame_0_tuple) >= 3:
+            frame_0 = frame_0_tuple[0]
+        elif len(frame_0_tuple) == 2:
+            frame_0 = frame_0_tuple[0]
+        else:
+            frame_0 = frame_0_tuple[0]
+    else:
+        frame_0 = frame_0_tuple
+
     assert abs(frame_0["latitude"] - 37.7749) < 0.01
     assert abs(frame_0["longitude"] - (-122.4194)) < 0.01
 
@@ -194,12 +227,18 @@ def test_multiple_frame_modifications(sample_video, tmp_path):
 
     output_metadata = parse_klv_file(result["klv_path"])
 
+    # Helper to unpack tuples (handles 2 or 3 element tuples)
+    def get_metadata(frame_tuple):
+        if isinstance(frame_tuple, tuple) and len(frame_tuple) > 0:
+            return frame_tuple[0]
+        return frame_tuple
+
     # Check each modified frame (allow 0.1 tolerance for KLV encoding precision)
-    assert abs(output_metadata[0]["latitude"] - 40.0) < 0.1
-    assert abs(output_metadata[5]["heading"] - 180.0) < 0.1
-    assert abs(output_metadata[10]["altitude"] - 2000.0) < 0.1
+    assert abs(get_metadata(output_metadata[0])["latitude"] - 40.0) < 0.1
+    assert abs(get_metadata(output_metadata[5])["heading"] - 180.0) < 0.1
+    assert abs(get_metadata(output_metadata[10])["altitude"] - 2000.0) < 0.1
 
     # Check unmodified frames still have original metadata
-    assert "longitude" in output_metadata[0]  # Not modified
-    assert "pitch" in output_metadata[5]  # Not modified
-    assert "latitude" in output_metadata[10]  # Not modified
+    assert "longitude" in get_metadata(output_metadata[0])  # Not modified
+    assert "pitch" in get_metadata(output_metadata[5])  # Not modified
+    assert "latitude" in get_metadata(output_metadata[10])  # Not modified
