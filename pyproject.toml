@@ -3,9 +3,9 @@ requires = ["setuptools>=45", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "klvhax"
+name = "kwiver-testdata"
 version = "0.1.0"
-description = "Generate test videos with KLV metadata streams for testing burnoutweb and KWIVER"
+description = "Generate test videos and images with metadata for testing KWIVER"
 authors = [{name = "Paul Hax"}]
 readme = "README.md"
 requires-python = ">=3.8"
