@@ -11,6 +11,30 @@ import numpy as np
 from klvdata import common, misb0601
 
 
+def calculate_klv_checksum(data: bytes) -> int:
+    """
+    Calculate running sum 16 checksum for MISB ST0601.
+
+    Per MISB ST 0601.19 section 6.2.2, the checksum is calculated by summing
+    all 16-bit words from the start of the Local Set Value up to and including
+    the checksum tag and length bytes.
+
+    Args:
+        data: Bytes to checksum (typically value_bytes + checksum_tag + checksum_length)
+
+    Returns:
+        16-bit checksum value
+    """
+    checksum = 0
+    for i, byte in enumerate(data):
+        if i % 2 == 0:
+            checksum += byte << 8
+        else:
+            checksum += byte
+        checksum &= 0xFFFF
+    return checksum
+
+
 class KLVMetadataGenerator:
     """Generates MISB ST 0601 KLV metadata packets from metadata dictionaries."""
 
@@ -211,11 +235,14 @@ class KLVMetadataGenerator:
                 value_bytes += tag_bytes
 
         # Add checksum (MISB ST0601 tag 1)
-        # Calculate CRC-16-CCITT over value_bytes
-        checksum = self._calculate_checksum(value_bytes)
+        # Per MISB ST 0601.19 section 6.2.2: checksum is calculated over all bytes
+        # from start of Local Set Value up to and including the checksum tag+length
         checksum_key = b"\x01"
+        checksum_length = common.ber_encode(2)  # Checksum is always 2 bytes
+
+        # Calculate checksum including the tag and length bytes
+        checksum = calculate_klv_checksum(value_bytes + checksum_key + checksum_length)
         checksum_value = checksum.to_bytes(2, byteorder="big")
-        checksum_length = common.ber_encode(len(checksum_value))
         value_bytes += checksum_key + checksum_length + checksum_value
 
         # Create complete packet: Key + Length + Value
@@ -223,17 +250,6 @@ class KLVMetadataGenerator:
         packet = self.UAS_LS_KEY + length_bytes + value_bytes
 
         return packet
-
-    def _calculate_checksum(self, data: bytes) -> int:
-        """Calculate running sum 16 checksum for MISB ST0601."""
-        checksum = 0
-        for i, byte in enumerate(data):
-            if i % 2 == 0:
-                checksum += byte << 8
-            else:
-                checksum += byte
-            checksum &= 0xFFFF
-        return checksum
 
 
 class VideoFrameGenerator:

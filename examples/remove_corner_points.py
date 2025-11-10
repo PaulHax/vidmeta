@@ -9,7 +9,19 @@ and regenerates the video with the modified metadata.
 import tempfile
 from pathlib import Path
 
+import cv2
 from klvdata import misb0601
+
+from kwiver_testdata.video_builder import (
+    VideoFrameGenerator,
+    build_klv_video,
+    calculate_klv_checksum,
+)
+from kwiver_testdata.video_modifier import (
+    extract_klv_stream_ffmpeg,
+    extract_video_frames,
+    parse_klv_file,
+)
 
 
 def remove_corner_points_from_packet(packet: bytes) -> bytes:
@@ -67,17 +79,13 @@ def remove_corner_points_from_packet(packet: bytes) -> bytes:
                 packet_data.extend(length_bytes)
             packet_data.extend(value)
 
-    # Add checksum (running sum 16 - same as video_builder)
-    checksum = 0
-    for i, byte in enumerate(packet_data):
-        if i % 2 == 0:
-            checksum += byte << 8
-        else:
-            checksum += byte
-        checksum &= 0xFFFF
-
+    # Add checksum (running sum 16)
+    # Per MISB ST 0601.19 section 6.2.2: checksum includes tag+length bytes
     packet_data.append(1)  # Checksum tag
     packet_data.append(2)  # Checksum length
+
+    # Calculate checksum over all data including checksum tag+length
+    checksum = calculate_klv_checksum(bytes(packet_data))
     packet_data.extend(checksum.to_bytes(2, byteorder="big"))
 
     return bytes(packet_data)
@@ -85,9 +93,7 @@ def remove_corner_points_from_packet(packet: bytes) -> bytes:
 
 def main():
     input_video = "/home/paulhax/src/tele/burnoutweb/test-videos/sample_video.mpg"
-    output_video = (
-        "/home/paulhax/src/tele/klv-test-videos/videos/sample_video_no_corners.ts"
-    )
+    output_video = "videos/sample_video_no_corners.ts"
 
     print("=" * 60)
     print("Remove Corner Points from Video")
@@ -96,57 +102,15 @@ def main():
     print(f"Output: {output_video}")
     print()
 
-    # Use the video modifier with a custom pass-through
-    from kwiver_testdata.video_modifier import (
-        extract_klv_stream_ffmpeg,
-        parse_klv_file,
-        extract_video_frames,
-    )
-    from kwiver_testdata.video_builder import build_klv_video, VideoFrameGenerator
-    import cv2
-
     # Extract KLV
     print("Extracting KLV stream...")
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_klv = Path(temp_dir) / "extracted.klv"
         extract_klv_stream_ffmpeg(input_video, str(temp_klv))
 
-        # Parse KLV and check for corner points
+        # Parse KLV metadata
         print("Parsing KLV metadata...")
         original_metadata = parse_klv_file(str(temp_klv))
-
-        # Debug: Check if corner points exist in the original
-        print("\nChecking for corner points in original video...")
-        frames_with_corners = 0
-        sample_frame = None
-        for frame_num, metadata in list(original_metadata.items())[:10]:
-            if "_raw_klv_packet" in metadata:
-                packet = metadata["_raw_klv_packet"]
-                # Parse to check for corner tags (26-33)
-                uas_set = misb0601.UASLocalMetadataSet(packet)
-                metadata_dict = uas_set.MetadataList()
-                corner_tags = set(range(26, 34))
-                found_corners = [
-                    tag for tag in metadata_dict.keys() if tag in corner_tags
-                ]
-                if found_corners:
-                    frames_with_corners += 1
-                    if sample_frame is None:
-                        sample_frame = frame_num
-                        print(
-                            f"  Frame {frame_num} has corner point tags: {found_corners}"
-                        )
-
-        print("  Total frames checked: 10")
-        print(f"  Frames with corner points: {frames_with_corners}")
-
-        if frames_with_corners == 0:
-            print("\n⚠️  WARNING: No corner points found in input video!")
-            print("   The input video may not have corner point metadata.")
-            return
-
-        print("\n✓ Corner points found. Proceeding with removal...")
-        print("Removing corner points from metadata...")
 
     # Extract video frames first to know how many we have
     print("Extracting video frames...")
@@ -154,15 +118,31 @@ def main():
     num_video_frames = len(frames)
 
     # Process each frame's metadata to remove corner points (only for frames we have)
+    print("Removing corner points from metadata...")
     modified_metadata = []
+    frames_with_corners = 0
+    corner_tags = set(range(26, 34))  # Tags 26-33
+
     for frame_num in range(num_video_frames):
         if frame_num in original_metadata:
-            metadata = original_metadata[frame_num].copy()
-            if "_raw_klv_packet" in metadata:
-                # Remove corner points from raw packet
-                raw_packet = metadata["_raw_klv_packet"]
-                modified_packet = remove_corner_points_from_packet(raw_packet)
-                metadata["_raw_klv_packet"] = modified_packet
+            # parse_klv_file returns (metadata_dict, raw_packet, unknown_tags)
+            metadata_dict, raw_packet, unknown_tags = original_metadata[frame_num]
+
+            # Check if this frame has corner points
+            uas_set = misb0601.UASLocalMetadataSet(raw_packet)
+            metadata_tags = uas_set.MetadataList()
+            has_corners = any(tag in corner_tags for tag in metadata_tags.keys())
+            if has_corners:
+                frames_with_corners += 1
+
+            # Remove corner points from raw packet
+            modified_packet = remove_corner_points_from_packet(raw_packet)
+
+            # Build new metadata dict with modified packet
+            metadata = metadata_dict.copy()
+            metadata["_raw_klv_packet"] = modified_packet
+            if unknown_tags:
+                metadata["_unknown_klv_tags"] = unknown_tags
             modified_metadata.append(metadata)
         else:
             # No metadata for this frame
@@ -205,10 +185,15 @@ def main():
     print("Complete!")
     print("=" * 60)
     print(f"\nGenerated: {result['video_path']}")
-    print(f"Frames: {result['num_frames']}")
+    print(f"Total frames: {result['num_frames']}")
+    print(f"Metadata frames: {len(original_metadata)}")
+    print(f"Frames with corner points: {frames_with_corners}")
     print(f"KLV bytes: {result['total_klv_bytes']}")
     print()
-    print("Corner points have been removed from all frames.")
+    if frames_with_corners > 0:
+        print(f"✓ Corner points removed from {frames_with_corners} frames.")
+    else:
+        print("ℹ No corner points found in video (removed nothing).")
 
 
 if __name__ == "__main__":
