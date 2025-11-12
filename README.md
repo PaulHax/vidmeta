@@ -4,52 +4,48 @@ Generate test videos and images with metadata for testing KWIVER.
 
 ## Installation
 
-### Basic Installation (FFmpeg-based)
-
-```bash
-cd kwiver-testdata
-uv pip install -e .
-```
-
-### GStreamer Support (Recommended for KWIVER Testing)
-
-For GStreamer-based KLV muxing with proper KLVA codec tags, correct checksums, and full seeking support:
+GStreamer support is required for generating KWIVER-compatible videos with proper KLVA codec tags.
 
 ```bash
 # Install system dependencies (Ubuntu/Debian)
 sudo apt-get install libgirepository1.0-dev gir1.2-gstreamer-1.0 gir1.2-gst-plugins-base-1.0 gstreamer1.0-plugins-bad gstreamer1.0-plugins-good gstreamer1.0-openh264
 
-# Install with GStreamer support
-uv pip install -e ".[gstreamer]"
+# Install the package
+cd kwiver-testdata
+uv pip install -e .
 ```
 
-**Why use GStreamer?**
+**Why GStreamer is required:**
 
 - Proper KLVA codec tags (vs generic bin_data from FFmpeg)
 - Correct running sum 16 checksums compatible with KWIVER
 - All I-frames for full seeking support (forward and backward)
-- Better compatibility with KWIVER's video readers
+- KWIVER requires KLVA tags to recognize metadata streams
 
 ## CLI Usage
 
 ```bash
-# Generate video matching sample_video.mpg frame 812 (uses GStreamer by default)
-generate-klv-video sample_video
-
-# Use FFmpeg backend instead
-generate-klv-video sample_video --backend ffmpeg
+# Generate video matching sample_video.mpg frame 812
+uv run generate-klv-video sample_video
 
 # List available scenarios
-generate-klv-video --list
+uv run generate-klv-video --list
 
 # Generate all scenarios
-generate-klv-video --all
+uv run generate-klv-video --all
 
 # Custom output and size
-generate-klv-video moving --output videos/my_test.ts --width 256 --height 256
+uv run generate-klv-video moving --output videos/my_test.ts --width 256 --height 256
+```
 
-# Specify backend explicitly
-generate-klv-video moving --backend gstreamer --width 256 --height 256
+## Running Example Scripts
+
+```bash
+# Remove corner points from video (keeps frame center lat/lon)
+uv run python examples/remove_corner_points.py
+
+# Remove corner points AND set frame center lat/lon to 0.0 (marker values)
+uv run python examples/remove_corners_and_frame_center_latlon.py
 ```
 
 Available scenarios: `sample_video`, `stationary`, `moving`, `high_altitude`, `minimal`
@@ -122,13 +118,13 @@ Modify KLV metadata in existing videos (like `sample_video.mpg`) while preservin
 
 ```bash
 # Modify metadata using JSON file
-modify-klv-video input.mpg -o output.ts --overrides changes.json
+uv run modify-klv-video input.mpg -o output.ts --overrides changes.json
 
 # Modify single field on command line
-modify-klv-video input.mpg -o output.ts --frame 5 --set latitude=37.5
+uv run modify-klv-video input.mpg -o output.ts --frame 5 --set latitude=37.5
 
 # Modify multiple frames and fields
-modify-klv-video input.mpg -o output.ts \
+uv run modify-klv-video input.mpg -o output.ts \
   --frame 0 --set latitude=37.7 longitude=-122.4 \
   --frame 10 --set altitude=2000 heading=180
 ```
@@ -179,7 +175,7 @@ result = modify_video_metadata(
 Run automated tests including round-trip validation:
 
 ```bash
-pytest tests/test_roundtrip.py -v
+uv run pytest tests/test_roundtrip.py -v
 ```
 
 Tests include:

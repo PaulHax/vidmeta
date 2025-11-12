@@ -371,9 +371,13 @@ def build_klv_video(
                 output_path, metadata_per_frame, width, height, fps, frame_generator
             )
         except ImportError as e:
-            print(f"GStreamer backend not available: {e}")
-            print("Falling back to FFmpeg backend...")
-            backend = "ffmpeg"
+            raise ImportError(
+                f"GStreamer backend not available: {e}\n\n"
+                "To use GStreamer-based KLV muxing, install:\n"
+                "  sudo apt-get install gir1.2-gstreamer-1.0 gir1.2-gst-plugins-base-1.0 gstreamer1.0-plugins-bad\n"
+                "  pip install 'PyGObject<3.51.0'\n\n"
+                "Or use backend='ffmpeg' (produces generic bin_data instead of KLVA codec tag)"
+            ) from e
 
     if backend != "ffmpeg":
         raise ValueError(f"Unknown backend: {backend}. Use 'gstreamer' or 'ffmpeg'")
