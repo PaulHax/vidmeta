@@ -1,12 +1,28 @@
 # vidmeta
 
-Generate test videos with embedded geospatial and sensor metadata. Primarily used for testing KWIVER and related computer vision tools.
+Parse, analyze, and generate test videos with embedded geospatial and sensor metadata (MISB ST 0601 KLV). Primarily used for testing KWIVER and related computer vision tools.
 
 ## Installation
 
-GStreamer is required for generating KWIVER-compatible videos with proper KLVA codec tags.
+### Metadata Analysis Only
 
-### Ubuntu/Debian
+For parsing and analyzing KLV metadata (no video generation):
+
+```bash
+pip install vidmeta
+```
+
+### With Video Generation
+
+To generate or modify videos with embedded KLV metadata:
+
+```bash
+pip install vidmeta[video]
+```
+
+This adds OpenCV and PyGObject dependencies. You'll also need GStreamer system packages.
+
+#### Ubuntu/Debian
 
 ```bash
 # Core GStreamer packages
@@ -23,11 +39,11 @@ sudo apt-get install -y \
 # OpenH264 codec (recommended for best compatibility)
 sudo apt-get install -y gstreamer1.0-openh264
 
-# Install vidmeta
-pip install vidmeta
+# Install vidmeta with video support
+pip install vidmeta[video]
 ```
 
-### Fedora/RHEL/CentOS
+#### Fedora/RHEL/CentOS
 
 ```bash
 # Enable RPM Fusion for additional codecs
@@ -43,17 +59,17 @@ sudo dnf install -y \
     gstreamer1-plugins-bad-free \
     gstreamer1-plugin-openh264
 
-pip install vidmeta
+pip install vidmeta[video]
 ```
 
-### macOS (Homebrew)
+#### macOS (Homebrew)
 
 ```bash
 brew install gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad
-pip install vidmeta
+pip install vidmeta[video]
 ```
 
-### Docker (All Platforms)
+#### Docker (All Platforms)
 
 ```dockerfile
 FROM python:3.11-slim
@@ -69,10 +85,10 @@ RUN apt-get update && apt-get install -y \
     gstreamer1.0-openh264 \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install vidmeta
+RUN pip install vidmeta[video]
 ```
 
-### Verify Installation
+#### Verify Video Installation
 
 ```bash
 # Check GStreamer version (1.16+ recommended)
@@ -85,7 +101,7 @@ gst-inspect-1.0 mpegtsmux
 gst-inspect-1.0 openh264enc
 ```
 
-### Troubleshooting
+#### Troubleshooting Video Generation
 
 **"GStreamer is not available" error:**
 - Ensure `gir1.2-gstreamer-1.0` package is installed (provides Python bindings)
@@ -101,7 +117,7 @@ gst-inspect-1.0 openh264enc
 pip install 'PyGObject>=3.44.0,<3.51.0'
 ```
 
-### Why GStreamer (Not FFmpeg)?
+#### Why GStreamer (Not FFmpeg)?
 
 FFmpeg CLI cannot set KLVA codec tags for data streams - it creates generic "bin_data" streams. GStreamer's `mpegtsmux` provides:
 
@@ -145,6 +161,28 @@ Each generates:
 - `.klv` file - Raw KLV packets for KWIVER testing (MISB ST 0601 format)
 
 ## Python API
+
+### Parsing KLV Metadata
+
+Parse KLV packets into typed Pydantic models (no video dependencies required):
+
+```python
+from vidmeta.klv_converter import parse_klv_packet_to_pydantic
+
+# Parse a raw KLV packet
+with open('metadata.klv', 'rb') as f:
+    raw_packet = f.read()
+
+parsed = parse_klv_packet_to_pydantic(raw_packet)
+
+# Access structured metadata
+print(f"Latitude: {parsed.metadata.platform.latitude}")
+print(f"Altitude: {parsed.metadata.platform.altitude}")
+print(f"Heading: {parsed.metadata.platform.heading}")
+print(f"Timestamp: {parsed.metadata.timestamp}")
+```
+
+### Generating Videos
 
 Unified API with backend selection (see `examples/example_gstreamer.py` for complete runnable example):
 

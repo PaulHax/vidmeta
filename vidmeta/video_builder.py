@@ -6,9 +6,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-import cv2
 import numpy as np
 from klvdata import common, misb0601
+
+try:
+    import cv2
+    OPENCV_AVAILABLE = True
+except ImportError:
+    OPENCV_AVAILABLE = False
+    cv2 = None
 
 
 def calculate_klv_checksum(data: bytes) -> int:
@@ -252,6 +258,16 @@ class KLVMetadataGenerator:
         return packet
 
 
+def _check_opencv():
+    """Check if OpenCV is available and raise helpful error if not."""
+    if not OPENCV_AVAILABLE:
+        raise ImportError(
+            "OpenCV is not available.\n\n"
+            "To use video generation features, install with:\n"
+            "  pip install vidmeta[video]"
+        )
+
+
 class VideoFrameGenerator:
     """Generates video frames with visual markers."""
 
@@ -263,6 +279,7 @@ class VideoFrameGenerator:
             width: Frame width in pixels
             height: Frame height in pixels
         """
+        _check_opencv()
         self.width = width
         self.height = height
 
@@ -384,6 +401,8 @@ def build_klv_video(
 
     if backend != "ffmpeg":
         raise ValueError(f"Unknown backend: {backend}. Use 'gstreamer' or 'ffmpeg'")
+
+    _check_opencv()
 
     # FFmpeg backend implementation
     num_frames = len(metadata_per_frame)

@@ -24,16 +24,18 @@ classifiers = [
 ]
 dependencies = [
     "klvdata>=0.0.3",
-    "opencv-python>=4.5.0",
     "numpy>=1.20.0",
     "pydantic>=2.0.0",
-    "PyGObject>=3.44.0",  # Requires system packages: gir1.2-gstreamer-1.0, gir1.2-gst-plugins-base-1.0, gstreamer1.0-plugins-bad
 ]
 
 [project.urls]
 Repository = "https://github.com/PaulHax/vidmeta"
 
 [project.optional-dependencies]
+video = [
+    "opencv-python>=4.5.0",
+    "PyGObject>=3.44.0",  # Requires system packages: gir1.2-gstreamer-1.0, gir1.2-gst-plugins-base-1.0, gstreamer1.0-plugins-bad
+]
 dev = [
     "pytest>=7.0.0",
     "ruff>=0.0.250",
