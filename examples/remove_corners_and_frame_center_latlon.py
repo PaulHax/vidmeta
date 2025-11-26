@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 """
-Remove corner points and set frame center lat/lon to marker values in KLV metadata.
+Remove corner points and set frame center lat/lon to unparseable in KLV metadata.
 
 This script extracts KLV metadata and:
 - Removes corner point fields (tags 26-33)
-- Sets Frame Center Latitude (tag 23) to 0.0 (equator - marker value)
-- Sets Frame Center Longitude (tag 24) to 0.0 (prime meridian - marker value)
+- Sets Frame Center Latitude (tag 23) to 0-byte length (unparseable)
+- Sets Frame Center Longitude (tag 24) to 0-byte length (unparseable)
 - Keeps Frame Center Elevation (tag 25) with valid value
 
-This creates metadata where frame center lat/lon are present but set to 0.0/0.0
-as a marker indicating they should not be used.
+KWIVER expects 4 bytes for lat/lon (klv_sflint_format). Writing 0 bytes causes
+KWIVER's parser to fail and store as klv_blob (invalid). When lat or lon are invalid,
+parse_geo_point() returns std::nullopt and the entire frame_center field is omitted
+from metadata (not added at all).
 """
 
 import tempfile
@@ -32,22 +34,25 @@ from kwiver_testdata.video_modifier import (
 
 def remove_fields_from_packet(packet: bytes) -> bytes:
     """
-    Remove corner points from a KLV packet.
+    Remove corner points and set frame center lat/lon to invalid in a KLV packet.
 
     Tags to remove:
     - Tag 26-33: Offset Corner Latitude/Longitude Points 1-4
 
-    Note: Frame center lat/lon (tags 23-24) are NOT removed here - they will be
-    set to NaN in the metadata dict and re-encoded by build_klv_video.
+    Tags to set to invalid:
+    - Tag 23: Frame Center Latitude - set to 0-byte length (unparseable by KWIVER)
+    - Tag 24: Frame Center Longitude - set to 0-byte length (unparseable by KWIVER)
 
     Args:
         packet: Raw KLV packet value bytes
 
     Returns:
-        Modified packet with corner points removed
+        Modified packet with corner points removed and frame center lat/lon invalid
     """
     # Tags to remove - only corner points
     tags_to_remove = set(range(26, 34))  # Corner points (tags 26-33)
+    # Tags to replace with invalid bytes
+    tags_to_invalidate = {23, 24}  # Frame center lat/lon
 
     # Rebuild packet without specified tags
     packet_data = bytearray()
@@ -76,7 +81,17 @@ def remove_fields_from_packet(packet: bytes) -> bytes:
         offset += length
 
         # Skip tags in removal list and checksum (we'll recalculate)
-        if tag not in tags_to_remove and tag != 1:  # 1 is checksum
+        if tag in tags_to_remove or tag == 1:  # 1 is checksum
+            continue
+
+        # For tags we want to invalidate, write with 0-byte length
+        # KWIVER expects 4 bytes for lat/lon (klv_sflint_format)
+        # Writing 0 bytes causes parse failure -> klv_blob -> invalid -> not added to metadata
+        if tag in tags_to_invalidate:
+            packet_data.append(tag)
+            packet_data.append(0)  # Length is 0 bytes - invalid, will fail to parse
+        else:
+            # Keep original tag/length/value
             packet_data.append(tag)
             if length < 128:
                 packet_data.append(length)
@@ -156,14 +171,8 @@ def main():
             # Build new metadata dict
             metadata = metadata_dict.copy()
 
-            # Set frame_center_latitude and frame_center_longitude to marker values
-            # Use 0.0, 0.0 (equator/prime meridian intersection) as unlikely real value
-            metadata["frame_center_latitude"] = 0.0
-            metadata["frame_center_longitude"] = 0.0
-
-            # DO NOT set _raw_klv_packet - this forces build_klv_video to rebuild
-            # from dict fields with our marker values
-            # metadata["_raw_klv_packet"] = modified_packet
+            # Use the modified raw packet which has invalid bytes for frame center lat/lon
+            metadata["_raw_klv_packet"] = modified_packet
 
             if unknown_tags:
                 metadata["_unknown_klv_tags"] = unknown_tags
@@ -218,8 +227,9 @@ def main():
     if frames_with_corners > 0 or frames_with_frame_center_latlon > 0:
         print(
             f"✓ Removed corner points from {frames_with_corners} frames "
-            f"and set frame center lat/lon to 0.0/0.0 (marker values) in {frames_with_frame_center_latlon} frames."
+            f"and made frame center lat/lon unparseable (0-byte length) in {frames_with_frame_center_latlon} frames."
         )
+        print("  KWIVER will omit frame_center from metadata when lat/lon are invalid.")
         print("  Frame center elevation (altitude) preserved with valid values.")
     else:
         print("ℹ No matching fields found in video.")

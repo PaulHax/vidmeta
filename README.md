@@ -44,7 +44,8 @@ uv run generate-klv-video moving --output videos/my_test.ts --width 256 --height
 # Remove corner points from video (keeps frame center lat/lon)
 uv run python examples/remove_corner_points.py
 
-# Remove corner points AND set frame center lat/lon to 0.0 (marker values)
+# Remove corner points AND make frame center lat/lon unparseable by KWIVER
+# (writes 0-byte length for tags 23-24, causing KWIVER to omit frame_center field)
 uv run python examples/remove_corners_and_frame_center_latlon.py
 ```
 
