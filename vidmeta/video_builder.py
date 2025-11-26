@@ -6,15 +6,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-import numpy as np
 from klvdata import common, misb0601
 
 try:
     import cv2
+    import numpy as np
     OPENCV_AVAILABLE = True
 except ImportError:
     OPENCV_AVAILABLE = False
     cv2 = None
+    np = None
 
 
 def calculate_klv_checksum(data: bytes) -> int:
@@ -263,8 +264,8 @@ def _check_opencv():
     if not OPENCV_AVAILABLE:
         raise ImportError(
             "OpenCV is not available.\n\n"
-            "To use video generation features, install with:\n"
-            "  pip install vidmeta[video]"
+            "To use video muxing features, install with:\n"
+            "  pip install vidmeta[mux]"
         )
 
 
@@ -285,7 +286,7 @@ class VideoFrameGenerator:
 
     def generate_frame(
         self, frame_num: int, total_frames: int, custom_text: Optional[str] = None
-    ) -> np.ndarray:
+    ):
         """
         Generate a single frame with visual markers.
 
@@ -295,13 +296,11 @@ class VideoFrameGenerator:
             custom_text: Optional custom text to display instead of frame number
 
         Returns:
-            Frame as numpy array (BGR format)
+            Frame as BGR image array
         """
-        # Create frame with changing background color
-        hue = int((frame_num / max(total_frames, 1)) * 179)  # HSV hue: 0-179
-        frame_hsv = np.full(
-            (self.height, self.width, 3), [hue, 200, 200], dtype=np.uint8
-        )
+        # Create solid color frame, cycle hue based on frame number
+        hue = int((frame_num / max(total_frames, 1)) * 179)
+        frame_hsv = np.full((self.height, self.width, 3), [hue, 200, 200], dtype=np.uint8)
         frame = cv2.cvtColor(frame_hsv, cv2.COLOR_HSV2BGR)
 
         # Add frame number or custom text

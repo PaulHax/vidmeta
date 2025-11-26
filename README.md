@@ -12,12 +12,12 @@ For parsing and analyzing KLV metadata (no video generation):
 pip install vidmeta
 ```
 
-### With Video Generation
+### With Video Muxing
 
 To generate or modify videos with embedded KLV metadata:
 
 ```bash
-pip install vidmeta[video]
+pip install vidmeta[mux]
 ```
 
 This adds OpenCV and PyGObject dependencies. You'll also need GStreamer system packages.
@@ -40,7 +40,7 @@ sudo apt-get install -y \
 sudo apt-get install -y gstreamer1.0-openh264
 
 # Install vidmeta with video support
-pip install vidmeta[video]
+pip install vidmeta[mux]
 ```
 
 #### Fedora/RHEL/CentOS
@@ -59,14 +59,14 @@ sudo dnf install -y \
     gstreamer1-plugins-bad-free \
     gstreamer1-plugin-openh264
 
-pip install vidmeta[video]
+pip install vidmeta[mux]
 ```
 
 #### macOS (Homebrew)
 
 ```bash
 brew install gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad
-pip install vidmeta[video]
+pip install vidmeta[mux]
 ```
 
 #### Docker (All Platforms)
@@ -85,7 +85,7 @@ RUN apt-get update && apt-get install -y \
     gstreamer1.0-openh264 \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install vidmeta[video]
+RUN pip install vidmeta[mux]
 ```
 
 #### Verify Video Installation

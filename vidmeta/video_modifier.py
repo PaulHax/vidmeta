@@ -5,10 +5,16 @@ import tempfile
 from pathlib import Path
 from typing import Dict, List, Any, Tuple
 
-import cv2
-import numpy as np
+try:
+    import cv2
+    import numpy as np
+    OPENCV_AVAILABLE = True
+except ImportError:
+    OPENCV_AVAILABLE = False
+    cv2 = None
+    np = None
 
-from .video_builder import build_klv_video, VideoFrameGenerator
+from .video_builder import build_klv_video, VideoFrameGenerator, _check_opencv
 from .klv_converter import parse_klv_packet_to_pydantic, pydantic_to_flat_dict
 
 
@@ -150,7 +156,7 @@ def parse_klv_file(
     return metadata_per_frame
 
 
-def extract_video_frames(video_path: str) -> List[np.ndarray]:
+def extract_video_frames(video_path: str):
     """
     Extract all frames from video.
 
@@ -158,8 +164,9 @@ def extract_video_frames(video_path: str) -> List[np.ndarray]:
         video_path: Path to video file
 
     Returns:
-        List of frames as numpy arrays (BGR format)
+        List of frames as BGR image arrays
     """
+    _check_opencv()
     cap = cv2.VideoCapture(video_path)
     frames = []
 
@@ -215,6 +222,7 @@ def modify_video_metadata(
         ...     "input.mpg", "output.mpg", metadata_overrides, lossless=True
         ... )
     """
+    _check_opencv()
     print(f"Processing {input_video_path}...")
 
     # Get video properties first

@@ -13,10 +13,9 @@ import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-import numpy as np
-
 try:
     import gi
+    import numpy as np
 
     gi.require_version("Gst", "1.0")
     from gi.repository import GLib, Gst
@@ -25,6 +24,7 @@ try:
 except (ImportError, ValueError) as e:
     GSTREAMER_AVAILABLE = False
     GSTREAMER_IMPORT_ERROR = str(e)
+    np = None
 
 from .video_builder import KLVMetadataGenerator, VideoFrameGenerator
 
