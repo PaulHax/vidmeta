@@ -69,6 +69,12 @@ Overrides JSON format:
         help="Muxing backend: gstreamer (proper KLVA tags, default) or ffmpeg (basic)",
     )
 
+    parser.add_argument(
+        "--re-encode",
+        action="store_true",
+        help="Re-encode video frames (lossy). Default is lossless passthrough.",
+    )
+
     args = parser.parse_args(argv)
 
     # Build metadata_overrides from arguments
@@ -121,9 +127,13 @@ Overrides JSON format:
         print("Use --overrides <file.json> or --frame N --set field=value")
         return 1
 
+    lossless = not args.re_encode
+
     print(f"Input video:  {args.input}")
     print(f"Output video: {args.output}")
-    print(f"Backend:      {args.backend}")
+    print(f"Mode:         {'lossless (preserves video frames)' if lossless else 're-encode (lossy)'}")
+    if not lossless:
+        print(f"Backend:      {args.backend}")
     print(f"Modifications: {len(metadata_overrides)} frames")
     print()
 
@@ -133,6 +143,7 @@ Overrides JSON format:
             output_video_path=args.output,
             metadata_overrides=metadata_overrides,
             backend=args.backend,
+            lossless=lossless,
         )
 
         print()
@@ -140,6 +151,8 @@ Overrides JSON format:
         print(f"  Video: {result['video_path']}")
         print(f"  KLV:   {result['klv_path']}")
         print(f"  Frames: {result['num_frames']}")
+        if result.get('lossless'):
+            print(f"  Mode: lossless (original video frames preserved)")
 
         return 0
 

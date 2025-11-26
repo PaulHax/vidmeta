@@ -333,6 +333,7 @@ def build_klv_video(
     fps: int = 30,
     frame_generator: Optional[VideoFrameGenerator] = None,
     backend: str = "gstreamer",
+    synchronous_klv: bool = False,
 ) -> Dict[str, Any]:
     """
     Build a test video with KLV metadata from a list of metadata dictionaries.
@@ -347,6 +348,8 @@ def build_klv_video(
         fps: Frames per second (default: 30)
         frame_generator: Optional custom frame generator
         backend: Muxing backend - "gstreamer" (default) or "ffmpeg"
+        synchronous_klv: If True, use synchronous KLV (stream_type=21 per MISB ST 1402).
+                        Only applies to gstreamer backend. Default is False.
 
     Returns:
         Dictionary with generation results:
@@ -368,7 +371,7 @@ def build_klv_video(
             from .gstreamer_muxer import build_klv_video_gstreamer
 
             return build_klv_video_gstreamer(
-                output_path, metadata_per_frame, width, height, fps, frame_generator
+                output_path, metadata_per_frame, width, height, fps, frame_generator, synchronous_klv
             )
         except ImportError as e:
             raise ImportError(

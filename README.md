@@ -4,22 +4,111 @@ Generate test videos with embedded geospatial and sensor metadata. Primarily use
 
 ## Installation
 
-GStreamer support is required for generating KWIVER-compatible videos with proper KLVA codec tags.
+GStreamer is required for generating KWIVER-compatible videos with proper KLVA codec tags.
+
+### Ubuntu/Debian
 
 ```bash
-# Install system dependencies (Ubuntu/Debian)
-sudo apt-get install libgirepository1.0-dev gir1.2-gstreamer-1.0 gir1.2-gst-plugins-base-1.0 gstreamer1.0-plugins-bad gstreamer1.0-plugins-good gstreamer1.0-openh264
+# Core GStreamer packages
+sudo apt-get update
+sudo apt-get install -y \
+    libgirepository1.0-dev \
+    gir1.2-gstreamer-1.0 \
+    gir1.2-gst-plugins-base-1.0 \
+    gstreamer1.0-tools \
+    gstreamer1.0-plugins-base \
+    gstreamer1.0-plugins-good \
+    gstreamer1.0-plugins-bad
 
-# Install the package
+# OpenH264 codec (recommended for best compatibility)
+sudo apt-get install -y gstreamer1.0-openh264
+
+# Install vidmeta
 pip install vidmeta
 ```
 
-**Why GStreamer is required:**
+### Fedora/RHEL/CentOS
 
-- Proper KLVA codec tags (vs generic bin_data from FFmpeg)
-- Correct running sum 16 checksums compatible with KWIVER
-- All I-frames for full seeking support (forward and backward)
-- KWIVER requires KLVA tags to recognize metadata streams
+```bash
+# Enable RPM Fusion for additional codecs
+sudo dnf install -y \
+    https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm
+
+# Core packages
+sudo dnf install -y \
+    gobject-introspection-devel \
+    gstreamer1-devel \
+    gstreamer1-plugins-base-devel \
+    gstreamer1-plugins-good \
+    gstreamer1-plugins-bad-free \
+    gstreamer1-plugin-openh264
+
+pip install vidmeta
+```
+
+### macOS (Homebrew)
+
+```bash
+brew install gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad
+pip install vidmeta
+```
+
+### Docker (All Platforms)
+
+```dockerfile
+FROM python:3.11-slim
+
+RUN apt-get update && apt-get install -y \
+    libgirepository1.0-dev \
+    gir1.2-gstreamer-1.0 \
+    gir1.2-gst-plugins-base-1.0 \
+    gstreamer1.0-tools \
+    gstreamer1.0-plugins-base \
+    gstreamer1.0-plugins-good \
+    gstreamer1.0-plugins-bad \
+    gstreamer1.0-openh264 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install vidmeta
+```
+
+### Verify Installation
+
+```bash
+# Check GStreamer version (1.16+ recommended)
+gst-inspect-1.0 --version
+
+# Verify mpegtsmux element (required for KLV muxing)
+gst-inspect-1.0 mpegtsmux
+
+# Verify openh264 encoder (optional but recommended)
+gst-inspect-1.0 openh264enc
+```
+
+### Troubleshooting
+
+**"GStreamer is not available" error:**
+- Ensure `gir1.2-gstreamer-1.0` package is installed (provides Python bindings)
+- Check PyGObject version: `pip show PyGObject` (should be >= 3.44.0)
+
+**"No suitable encoder found" error:**
+- Install `gstreamer1.0-openh264` for H.264 encoding
+- Fallback uses Theora if H.264 unavailable
+
+**PyGObject version conflicts:**
+```bash
+# For Ubuntu 22.04 with girepository-1.0
+pip install 'PyGObject>=3.44.0,<3.51.0'
+```
+
+### Why GStreamer (Not FFmpeg)?
+
+FFmpeg CLI cannot set KLVA codec tags for data streams - it creates generic "bin_data" streams. GStreamer's `mpegtsmux` provides:
+
+- **KLVA codec tags** - Required by KWIVER to recognize metadata streams
+- **MISB ST 0601 checksums** - Running sum 16 validation
+- **All I-frames** - Full forward/backward seeking support
+- **Synchronous KLV** - Optional MISB ST 1402 compliance (stream_type=21)
 
 ## CLI Usage
 
@@ -52,7 +141,7 @@ Available scenarios: `sample_video`, `stationary`, `moving`, `high_altitude`, `m
 
 Each generates:
 
-- `.ts` file - MPEG-TS video with embedded KLV data stream
+- `.ts` or `.mpg` file - MPEG-TS video with embedded KLV data stream (both extensions work)
 - `.klv` file - Raw KLV packets for KWIVER testing (MISB ST 0601 format)
 
 ## Python API
@@ -110,21 +199,24 @@ print(f"Frames: {result['num_frames']}")
 
 ## Modifying Existing Videos
 
-Modify KLV metadata in existing videos (like `sample_video.mpg`) while preserving original video frames.
+Modify KLV metadata in existing videos (like `sample_video.mpg`) while preserving original video frames **losslessly** (no re-encoding).
 
 ### CLI Usage
 
 ```bash
-# Modify metadata using JSON file
+# Lossless modification (default) - preserves original video frames exactly
+vidmeta-modify input.mpg -o output.mpg --frame 5 --set latitude=37.5
+
+# Output can be .mpg or .ts (both are MPEG-TS containers)
 vidmeta-modify input.mpg -o output.ts --overrides changes.json
 
-# Modify single field on command line
-vidmeta-modify input.mpg -o output.ts --frame 5 --set latitude=37.5
-
 # Modify multiple frames and fields
-vidmeta-modify input.mpg -o output.ts \
+vidmeta-modify input.mpg -o output.mpg \
   --frame 0 --set latitude=37.7 longitude=-122.4 \
   --frame 10 --set altitude=2000 heading=180
+
+# Force re-encoding (lossy, but more flexible)
+vidmeta-modify input.mpg -o output.ts --re-encode --frame 5 --set latitude=37.5
 ```
 
 **Overrides JSON format:**
@@ -142,29 +234,42 @@ vidmeta-modify input.mpg -o output.ts \
 ```python
 from vidmeta.video_modifier import modify_video_metadata
 
-# Define metadata changes for specific frames
 metadata_overrides = {
     0: {"latitude": 37.7749, "longitude": -122.4194},
     5: {"heading": 180.0, "pitch": -30.0},
     10: {"altitude": 2000.0}
 }
 
-# Modify the video
+# Lossless modification (default) - preserves original video frames
+result = modify_video_metadata(
+    input_video_path='videos/sample_video.mpg',
+    output_video_path='videos/modified.mpg',  # Can use .mpg or .ts
+    metadata_overrides=metadata_overrides,
+    lossless=True  # Default - video frames pass through unchanged
+)
+
+# Or force re-encoding (lossy)
 result = modify_video_metadata(
     input_video_path='videos/sample_video.mpg',
     output_video_path='videos/modified.ts',
     metadata_overrides=metadata_overrides,
+    lossless=False,
     backend='gstreamer'
 )
 ```
 
-**How it works:**
+**How lossless mode works:**
 
-- Extracts KLV stream from input video using FFmpeg
-- Parses KLV packets to extract existing metadata
-- Merges your overrides with original metadata (field-level merge)
-- Preserves original video frames (no re-encoding)
-- Generates new video with modified metadata
+- Uses GStreamer pipeline: `tsdemux ! h264parse ! mpegtsmux`
+- Video stream passes through without decoding/re-encoding
+- Only the KLV metadata stream is replaced
+- Original video quality preserved exactly
+
+**How re-encode mode works (lossless=False):**
+
+- Extracts and decodes video frames
+- Re-encodes with new KLV metadata
+- Useful when video codec needs to change
 
 **See also:** `examples/modify_sample_video.py` for a complete runnable example
 

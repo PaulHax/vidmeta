@@ -61,6 +61,7 @@ class GStreamerKLVMuxer:
         height: int = 64,
         fps: int = 30,
         frame_generator: Optional[VideoFrameGenerator] = None,
+        synchronous_klv: bool = False,
     ) -> Dict[str, Any]:
         """
         Build video with KLV using GStreamer.
@@ -72,6 +73,9 @@ class GStreamerKLVMuxer:
             height: Frame height in pixels
             fps: Frames per second
             frame_generator: Optional custom frame generator
+            synchronous_klv: If True, use synchronous KLV (stream_type=21 per MISB ST 1402).
+                           Default is False (asynchronous KLV, stream_type=6).
+                           Both work with KWIVER; synchronous provides tighter frame sync.
 
         Returns:
             Dictionary with generation results
@@ -105,7 +109,7 @@ class GStreamerKLVMuxer:
 
         # Build and run pipeline
         success = self._run_pipeline(
-            frames, klv_packets, output_path, width, height, fps
+            frames, klv_packets, output_path, width, height, fps, synchronous_klv
         )
 
         return {
@@ -125,6 +129,7 @@ class GStreamerKLVMuxer:
         width: int,
         height: int,
         fps: int,
+        synchronous_klv: bool = False,
     ) -> bool:
         """Build and run GStreamer pipeline."""
 
@@ -139,6 +144,13 @@ class GStreamerKLVMuxer:
             ("theoraenc", None),  # Theora doesn't need parse
         ]
 
+        # KLV caps: synchronous (stream_type=21) vs asynchronous (default, stream_type=6)
+        # Per MISB ST 1402, stream_type=21 (0x15) is for synchronous metadata
+        # Both work with KWIVER; synchronous provides tighter PTS-based frame sync
+        klv_caps = "meta/x-klv,parsed=true"
+        if synchronous_klv:
+            klv_caps = "meta/x-klv,parsed=true,stream_type=21"
+
         pipeline_desc = None
         for encoder, parser in encoders:
             parse_str = f"{parser} ! " if parser else ""
@@ -150,7 +162,7 @@ class GStreamerKLVMuxer:
                 f"{parse_str}"
                 f"mpegtsmux name=mux ! "
                 f"filesink location={output_path} "
-                f"appsrc name=klvsrc format=time caps=meta/x-klv,parsed=true ! mux."
+                f"appsrc name=klvsrc format=time caps={klv_caps} ! mux."
             )
             try:
                 test_pipeline = Gst.parse_launch(test_desc)
@@ -289,6 +301,7 @@ def build_klv_video_gstreamer(
     height: int = 64,
     fps: int = 30,
     frame_generator: Optional[VideoFrameGenerator] = None,
+    synchronous_klv: bool = False,
 ) -> Dict[str, Any]:
     """
     Build test video with KLV using GStreamer.
@@ -302,11 +315,188 @@ def build_klv_video_gstreamer(
         height: Frame height in pixels
         fps: Frames per second
         frame_generator: Optional custom frame generator
+        synchronous_klv: If True, use synchronous KLV (stream_type=21 per MISB ST 1402).
+                        Default is False (asynchronous KLV). Both work with KWIVER.
 
     Returns:
         Dictionary with generation results
     """
     muxer = GStreamerKLVMuxer()
     return muxer.build_video(
-        output_path, metadata_per_frame, width, height, fps, frame_generator
+        output_path, metadata_per_frame, width, height, fps, frame_generator, synchronous_klv
     )
+
+
+class GStreamerLosslessRemuxer:
+    """
+    Lossless remuxer that preserves original video frames while replacing KLV metadata.
+
+    Uses tsdemux -> h264parse -> mpegtsmux pipeline to avoid video re-encoding.
+    """
+
+    def __init__(self):
+        check_gstreamer()
+        Gst.init(None)
+        self.klv_gen = KLVMetadataGenerator()
+        self.loop = None
+        self.pipeline = None
+        self.error = None
+
+    def remux_with_new_klv(
+        self,
+        input_path: str,
+        output_path: str,
+        klv_packets: List[bytes],
+        fps: int = 25,
+        synchronous_klv: bool = False,
+    ) -> bool:
+        """
+        Remux video with new KLV metadata without re-encoding video.
+
+        Args:
+            input_path: Input video file path
+            output_path: Output video file path
+            klv_packets: List of KLV packets (one per frame)
+            fps: Video frame rate (used for KLV timing)
+            synchronous_klv: If True, use stream_type=21
+
+        Returns:
+            True if successful
+        """
+        klv_caps = "meta/x-klv,parsed=true"
+        if synchronous_klv:
+            klv_caps = "meta/x-klv,parsed=true,stream_type=21"
+
+        pipeline_desc = (
+            f"filesrc location={input_path} ! "
+            f"tsdemux name=demux "
+            f"demux. ! queue ! h264parse ! mpegtsmux name=mux ! "
+            f"filesink location={output_path} "
+            f"appsrc name=klvsrc format=time caps={klv_caps} ! mux."
+        )
+
+        print(f"Lossless remux pipeline: {pipeline_desc}")
+
+        try:
+            self.pipeline = Gst.parse_launch(pipeline_desc)
+        except Exception as e:
+            print(f"Failed to create pipeline: {e}")
+            return False
+
+        klv_src = self.pipeline.get_by_name("klvsrc")
+        if not klv_src:
+            print("Failed to get klvsrc element")
+            return False
+
+        self._setup_klv_pushing(klv_src, klv_packets, fps)
+
+        bus = self.pipeline.get_bus()
+        bus.add_signal_watch()
+        bus.connect("message", self._on_message)
+
+        print("Starting lossless remux pipeline...")
+        ret = self.pipeline.set_state(Gst.State.PLAYING)
+        if ret == Gst.StateChangeReturn.FAILURE:
+            print("Unable to set pipeline to playing state")
+            return False
+
+        self.loop = GLib.MainLoop()
+        loop_thread = threading.Thread(target=self.loop.run)
+        loop_thread.start()
+        loop_thread.join()
+
+        self.pipeline.set_state(Gst.State.NULL)
+        return self.error is None
+
+    def _setup_klv_pushing(self, klv_src, klv_packets, fps):
+        """Set up callback to push KLV data."""
+        klv_idx = [0]
+
+        def push_klv_data(src):
+            if klv_idx[0] >= len(klv_packets):
+                src.emit("end-of-stream")
+                return False
+
+            packet = klv_packets[klv_idx[0]]
+            buf = Gst.Buffer.new_wrapped(packet)
+            buf.pts = klv_idx[0] * Gst.SECOND // fps
+            buf.duration = Gst.SECOND // fps
+
+            ret = src.emit("push-buffer", buf)
+            if ret != Gst.FlowReturn.OK:
+                print(f"Failed to push KLV buffer: {ret}")
+                return False
+
+            klv_idx[0] += 1
+            return True
+
+        klv_src.connect("need-data", lambda src, size: push_klv_data(src))
+
+    def _on_message(self, bus, message):
+        """Handle bus messages."""
+        t = message.type
+
+        if t == Gst.MessageType.EOS:
+            print("End of stream (lossless remux complete)")
+            if self.loop:
+                self.loop.quit()
+        elif t == Gst.MessageType.ERROR:
+            err, debug = message.parse_error()
+            print(f"Error: {err}, {debug}")
+            self.error = err
+            if self.loop:
+                self.loop.quit()
+        elif t == Gst.MessageType.WARNING:
+            warn, debug = message.parse_warning()
+            print(f"Warning: {warn}, {debug}")
+
+
+def remux_video_lossless(
+    input_path: str,
+    output_path: str,
+    metadata_per_frame: List[Dict[str, Any]],
+    fps: int = 25,
+    synchronous_klv: bool = False,
+) -> Dict[str, Any]:
+    """
+    Remux video with new KLV metadata without re-encoding video frames.
+
+    This preserves original video quality exactly - only the KLV metadata is replaced.
+
+    Args:
+        input_path: Input video file path (.mpg, .ts)
+        output_path: Output video file path (.mpg, .ts)
+        metadata_per_frame: List of metadata dictionaries, one per frame
+        fps: Video frame rate (for KLV timing synchronization)
+        synchronous_klv: If True, use synchronous KLV (stream_type=21)
+
+    Returns:
+        Dictionary with remux results
+    """
+    klv_gen = KLVMetadataGenerator()
+
+    klv_packets = []
+    for metadata in metadata_per_frame:
+        packet = klv_gen.create_packet_from_dict(metadata)
+        klv_packets.append(packet)
+
+    total_klv_bytes = sum(len(p) for p in klv_packets)
+
+    klv_output = Path(output_path).with_suffix(".klv")
+    with open(klv_output, "wb") as f:
+        for packet in klv_packets:
+            f.write(packet)
+
+    remuxer = GStreamerLosslessRemuxer()
+    success = remuxer.remux_with_new_klv(
+        input_path, output_path, klv_packets, fps, synchronous_klv
+    )
+
+    return {
+        "success": success,
+        "video_path": output_path,
+        "klv_path": str(klv_output),
+        "num_frames": len(metadata_per_frame),
+        "total_klv_bytes": total_klv_bytes,
+        "lossless": True,
+    }

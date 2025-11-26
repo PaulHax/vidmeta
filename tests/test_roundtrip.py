@@ -1,10 +1,12 @@
-"""Test round-trip metadata preservation: extract and re-encode without changes."""
+"""Test round-trip metadata preservation and lossless video modification."""
 
+import hashlib
 import subprocess
 import tempfile
 import urllib.request
 from pathlib import Path
 
+import cv2
 import pytest
 
 from vidmeta.video_modifier import modify_video_metadata, parse_klv_file
@@ -31,12 +33,12 @@ def test_roundtrip_preserves_metadata(sample_video, tmp_path):
     """Test that round-trip preserves all metadata correctly."""
     output_video = tmp_path / "roundtrip_test.ts"
 
-    # Run modification with no overrides
+    # Run lossless modification with no overrides
     result = modify_video_metadata(
         input_video_path=sample_video,
         output_video_path=str(output_video),
         metadata_overrides={},
-        backend="gstreamer",
+        lossless=True,
     )
 
     assert result["success"]
@@ -138,7 +140,7 @@ def test_roundtrip_frame_count_matches(sample_video, tmp_path):
         input_video_path=sample_video,
         output_video_path=str(output_video),
         metadata_overrides={},
-        backend="gstreamer",
+        lossless=True,
     )
 
     # Count frames in original
@@ -178,7 +180,7 @@ def test_modification_with_overrides(sample_video, tmp_path):
         input_video_path=sample_video,
         output_video_path=str(output_video),
         metadata_overrides=metadata_overrides,
-        backend="gstreamer",
+        lossless=True,
     )
 
     assert result["success"]
@@ -222,7 +224,7 @@ def test_multiple_frame_modifications(sample_video, tmp_path):
         input_video_path=sample_video,
         output_video_path=str(output_video),
         metadata_overrides=metadata_overrides,
-        backend="gstreamer",
+        lossless=True,
     )
 
     output_metadata = parse_klv_file(result["klv_path"])
@@ -242,3 +244,157 @@ def test_multiple_frame_modifications(sample_video, tmp_path):
     assert "longitude" in get_metadata(output_metadata[0])  # Not modified
     assert "pitch" in get_metadata(output_metadata[5])  # Not modified
     assert "latitude" in get_metadata(output_metadata[10])  # Not modified
+
+
+def extract_frame_hashes(video_path: str, frame_indices: list) -> dict:
+    """Extract MD5 hashes of specific frames from a video."""
+    cap = cv2.VideoCapture(video_path)
+    hashes = {}
+
+    for frame_idx in frame_indices:
+        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+        ret, frame = cap.read()
+        if ret:
+            hashes[frame_idx] = hashlib.md5(frame.tobytes()).hexdigest()
+
+    cap.release()
+    return hashes
+
+
+def test_lossless_preserves_video_frames(sample_video, tmp_path):
+    """Test that lossless mode preserves video frames exactly (bitwise identical)."""
+    output_video = tmp_path / "lossless_test.mpg"
+
+    # Modify some metadata (use valid MISB ranges: latitude -90 to 90)
+    metadata_overrides = {
+        0: {"latitude": 45.0},
+        100: {"heading": 270.0},
+    }
+
+    result = modify_video_metadata(
+        input_video_path=sample_video,
+        output_video_path=str(output_video),
+        metadata_overrides=metadata_overrides,
+        lossless=True,
+    )
+
+    assert result["success"]
+    assert result.get("lossless") is True
+
+    # Extract frame hashes from original and output
+    frames_to_check = [0, 50, 100, 500, 1000, 1500]
+
+    original_hashes = extract_frame_hashes(sample_video, frames_to_check)
+    output_hashes = extract_frame_hashes(str(output_video), frames_to_check)
+
+    # All frame hashes should be identical
+    for frame_idx in frames_to_check:
+        if frame_idx in original_hashes and frame_idx in output_hashes:
+            assert original_hashes[frame_idx] == output_hashes[frame_idx], (
+                f"Frame {frame_idx} differs: lossless mode should preserve frames exactly"
+            )
+
+
+def test_lossless_output_mpg_extension(sample_video, tmp_path):
+    """Test that .mpg output extension works."""
+    output_video = tmp_path / "output_test.mpg"
+
+    result = modify_video_metadata(
+        input_video_path=sample_video,
+        output_video_path=str(output_video),
+        metadata_overrides={0: {"latitude": 42.0}},
+        lossless=True,
+    )
+
+    assert result["success"]
+    assert output_video.exists()
+    assert output_video.suffix == ".mpg"
+
+    # Verify output is valid MPEG-TS
+    cmd = ["ffprobe", "-v", "error", "-show_format", str(output_video)]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    assert proc.returncode == 0
+    assert "mpegts" in proc.stdout
+
+
+def test_re_encode_mode_still_works(sample_video, tmp_path):
+    """Test that re-encode mode (lossless=False) still works."""
+    output_video = tmp_path / "re_encode_test.ts"
+
+    result = modify_video_metadata(
+        input_video_path=sample_video,
+        output_video_path=str(output_video),
+        metadata_overrides={0: {"latitude": 55.0}},
+        lossless=False,
+        backend="gstreamer",
+    )
+
+    assert result["success"]
+    assert output_video.exists()
+
+    # In re-encode mode, lossless should not be set
+    assert result.get("lossless") is not True
+
+    # Verify metadata was modified
+    output_metadata = parse_klv_file(result["klv_path"])
+
+    def get_metadata(frame_tuple):
+        if isinstance(frame_tuple, tuple) and len(frame_tuple) > 0:
+            return frame_tuple[0]
+        return frame_tuple
+
+    assert abs(get_metadata(output_metadata[0])["latitude"] - 55.0) < 0.1
+
+
+def test_lossless_preserves_all_frames(sample_video, tmp_path):
+    """Test that lossless mode preserves ALL video frames (comprehensive check)."""
+    output_video = tmp_path / "lossless_all_frames_test.mpg"
+
+    # Modify metadata on multiple frames (use valid MISB ranges)
+    result = modify_video_metadata(
+        input_video_path=sample_video,
+        output_video_path=str(output_video),
+        metadata_overrides={0: {"latitude": 42.0}, 500: {"heading": 123.0}},
+        lossless=True,
+    )
+
+    assert result["success"]
+
+    # Open both videos
+    cap_original = cv2.VideoCapture(sample_video)
+    cap_output = cv2.VideoCapture(str(output_video))
+
+    original_frame_count = int(cap_original.get(cv2.CAP_PROP_FRAME_COUNT))
+    output_frame_count = int(cap_output.get(cv2.CAP_PROP_FRAME_COUNT))
+
+    assert original_frame_count == output_frame_count, (
+        f"Frame count mismatch: {original_frame_count} vs {output_frame_count}"
+    )
+
+    # Check every 100th frame to verify lossless preservation
+    frames_checked = 0
+    frames_matched = 0
+
+    for frame_idx in range(0, min(original_frame_count, output_frame_count), 100):
+        cap_original.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+        cap_output.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+
+        ret1, frame1 = cap_original.read()
+        ret2, frame2 = cap_output.read()
+
+        if ret1 and ret2:
+            frames_checked += 1
+            hash1 = hashlib.md5(frame1.tobytes()).hexdigest()
+            hash2 = hashlib.md5(frame2.tobytes()).hexdigest()
+            if hash1 == hash2:
+                frames_matched += 1
+
+    cap_original.release()
+    cap_output.release()
+
+    # All checked frames should match
+    assert frames_checked > 0, "No frames were checked"
+    assert frames_matched == frames_checked, (
+        f"Only {frames_matched}/{frames_checked} frames matched - "
+        "lossless mode should preserve all frames exactly"
+    )

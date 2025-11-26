@@ -178,24 +178,27 @@ def modify_video_metadata(
     output_video_path: str,
     metadata_overrides: Dict[int, Dict[str, Any]],
     backend: str = "gstreamer",
+    lossless: bool = True,
 ) -> Dict[str, Any]:
     """
     Modify KLV metadata in an existing video.
 
     Takes an existing video with KLV metadata and produces a new video with modified
-    metadata. Original video frames are preserved. Metadata for frames not in
-    metadata_overrides is kept unchanged. Fields in metadata_overrides are merged
-    with existing metadata (add/update specified fields only).
+    metadata. Metadata for frames not in metadata_overrides is kept unchanged.
+    Fields in metadata_overrides are merged with existing metadata.
 
     Args:
         input_video_path: Path to input video with KLV metadata
-        output_video_path: Path for output video
+        output_video_path: Path for output video (.mpg or .ts)
         metadata_overrides: Dict mapping frame numbers to metadata field updates
                            Example: {5: {"latitude": 37.5}, 10: {"altitude": 1000}}
-        backend: "gstreamer" (default) or "ffmpeg"
+        backend: "gstreamer" (default) or "ffmpeg" (only used if lossless=False)
+        lossless: If True (default), preserve original video frames exactly without
+                 re-encoding. Only the KLV metadata is replaced. Requires GStreamer.
+                 If False, video is decoded and re-encoded (lossy but more flexible).
 
     Returns:
-        Dictionary with generation results from build_klv_video()
+        Dictionary with generation results
 
     Raises:
         ValueError: If frame numbers in metadata_overrides exceed video length
@@ -209,10 +212,20 @@ def modify_video_metadata(
         ...     10: {"altitude": 2000.0, "pitch": -20.0}
         ... }
         >>> result = modify_video_metadata(
-        ...     "input.mpg", "output.ts", metadata_overrides
+        ...     "input.mpg", "output.mpg", metadata_overrides, lossless=True
         ... )
     """
     print(f"Processing {input_video_path}...")
+
+    # Get video properties first
+    cap = cv2.VideoCapture(input_video_path)
+    fps = int(cap.get(cv2.CAP_PROP_FPS))
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    num_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    cap.release()
+
+    print(f"Video: {width}x{height} @ {fps} fps, {num_frames} frames")
 
     # Extract KLV stream using FFmpeg
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -225,11 +238,6 @@ def modify_video_metadata(
         original_metadata = parse_klv_file(str(temp_klv))
 
     print(f"Found metadata for {len(original_metadata)} frames")
-
-    print("Extracting video frames...")
-    frames = extract_video_frames(input_video_path)
-    num_frames = len(frames)
-    print(f"Extracted {num_frames} frames")
 
     # Validate frame numbers
     invalid_frames = [f for f in metadata_overrides.keys() if f >= num_frames]
@@ -244,15 +252,12 @@ def modify_video_metadata(
     merged_metadata = []
 
     for frame_num in range(num_frames):
-        # Get original metadata tuple (metadata_dict, raw_packet, unknown_tags)
         original_tuple = original_metadata.get(frame_num, ({}, None, {}))
 
-        # Unpack tuple - handle both old (2-element) and new (3-element) formats
         if isinstance(original_tuple, tuple):
             if len(original_tuple) == 3:
                 frame_meta, raw_packet, unknown_tags = original_tuple
             elif len(original_tuple) == 2:
-                # Backward compatibility: old (metadata_dict, raw_packet) format
                 frame_meta, raw_packet = original_tuple
                 unknown_tags = {}
             else:
@@ -260,71 +265,66 @@ def modify_video_metadata(
                 raw_packet = None
                 unknown_tags = {}
         else:
-            # Very old format: just a dict
             frame_meta = original_tuple
             raw_packet = None
             unknown_tags = {}
 
-        # Make a copy to avoid modifying original
         frame_meta = frame_meta.copy()
 
-        # Merge overrides if present
         if frame_num in metadata_overrides:
-            # When fields are modified, we can't use the raw packet anymore
-            # But we CAN preserve unknown tags by storing them separately
             if "_raw_klv_packet" in frame_meta:
                 del frame_meta["_raw_klv_packet"]
-
-            # Store unknown tags so video_builder can include them when re-encoding
             if unknown_tags:
                 frame_meta["_unknown_klv_tags"] = unknown_tags
-
             frame_meta.update(metadata_overrides[frame_num])
-            print(
-                f"  Frame {frame_num}: Updated {list(metadata_overrides[frame_num].keys())}"
-            )
+            print(f"  Frame {frame_num}: Updated {list(metadata_overrides[frame_num].keys())}")
             if unknown_tags:
-                print(
-                    f"  Frame {frame_num}: Preserving {len(unknown_tags)} unknown KLV tags"
-                )
+                print(f"  Frame {frame_num}: Preserving {len(unknown_tags)} unknown KLV tags")
         elif raw_packet is not None:
-            # No modifications - preserve raw packet for complete pass-through
             frame_meta["_raw_klv_packet"] = raw_packet
 
         merged_metadata.append(frame_meta)
 
-    # Get video properties
-    cap = cv2.VideoCapture(input_video_path)
-    fps = int(cap.get(cv2.CAP_PROP_FPS))
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    cap.release()
+    if lossless:
+        from .gstreamer_muxer import remux_video_lossless
 
-    print(f"\nGenerating output video: {width}x{height} @ {fps} fps")
-    print(f"Using backend: {backend}")
+        print(f"\nLossless remux: preserving original video frames")
+        print(f"Output: {output_video_path}")
 
-    # Create frame generator that returns pre-extracted frames
-    class PreExtractedFrameGenerator(VideoFrameGenerator):
-        def __init__(self, frames_list):
-            self.frames_list = frames_list
-            # Set dimensions for compatibility
-            self.width = frames_list[0].shape[1] if frames_list else 0
-            self.height = frames_list[0].shape[0] if frames_list else 0
+        result = remux_video_lossless(
+            input_path=input_video_path,
+            output_path=output_video_path,
+            metadata_per_frame=merged_metadata,
+            fps=fps,
+        )
+    else:
+        print("Extracting video frames for re-encoding...")
+        frames = extract_video_frames(input_video_path)
+        print(f"Extracted {len(frames)} frames")
 
-        def generate_frame(self, frame_num, total_frames, custom_text=None):
-            return self.frames_list[frame_num]
+        print(f"\nGenerating output video: {width}x{height} @ {fps} fps")
+        print(f"Using backend: {backend}")
 
-    frame_gen = PreExtractedFrameGenerator(frames)
+        class PreExtractedFrameGenerator(VideoFrameGenerator):
+            def __init__(self, frames_list):
+                self.frames_list = frames_list
+                self.width = frames_list[0].shape[1] if frames_list else 0
+                self.height = frames_list[0].shape[0] if frames_list else 0
 
-    result = build_klv_video(
-        output_path=output_video_path,
-        metadata_per_frame=merged_metadata,
-        width=width,
-        height=height,
-        fps=fps,
-        frame_generator=frame_gen,
-        backend=backend,
-    )
+            def generate_frame(self, frame_num, total_frames, custom_text=None):
+                return self.frames_list[frame_num]
+
+        frame_gen = PreExtractedFrameGenerator(frames)
+
+        result = build_klv_video(
+            output_path=output_video_path,
+            metadata_per_frame=merged_metadata,
+            width=width,
+            height=height,
+            fps=fps,
+            frame_generator=frame_gen,
+            backend=backend,
+        )
 
     print(f"\nModified video saved to: {result['video_path']}")
     print(f"KLV file saved to: {result['klv_path']}")
