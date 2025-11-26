@@ -9,7 +9,7 @@ and create a modified version with changed metadata values.
 import urllib.request
 from pathlib import Path
 
-from kwiver_testdata.video_modifier import modify_video_metadata
+from vidmeta.video_modifier import modify_video_metadata
 
 
 def download_sample_video():

@@ -12,12 +12,12 @@ from pathlib import Path
 import cv2
 from klvdata import misb0601
 
-from kwiver_testdata.video_builder import (
+from vidmeta.video_builder import (
     VideoFrameGenerator,
     build_klv_video,
     calculate_klv_checksum,
 )
-from kwiver_testdata.video_modifier import (
+from vidmeta.video_modifier import (
     extract_klv_stream_ffmpeg,
     extract_video_frames,
     parse_klv_file,

@@ -11,7 +11,7 @@ of key-value pairs. The generated video will have:
 
 from datetime import datetime, timezone
 
-from kwiver_testdata.video_builder import build_klv_video
+from vidmeta.video_builder import build_klv_video
 
 
 def main():

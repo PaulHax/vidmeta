@@ -1,6 +1,6 @@
-# kwiver-testdata
+# vidmeta
 
-Generate test videos and images with metadata for testing KWIVER.
+Generate test videos with embedded geospatial and sensor metadata. Primarily used for testing KWIVER and related computer vision tools.
 
 ## Installation
 
@@ -11,8 +11,7 @@ GStreamer support is required for generating KWIVER-compatible videos with prope
 sudo apt-get install libgirepository1.0-dev gir1.2-gstreamer-1.0 gir1.2-gst-plugins-base-1.0 gstreamer1.0-plugins-bad gstreamer1.0-plugins-good gstreamer1.0-openh264
 
 # Install the package
-cd kwiver-testdata
-uv pip install -e .
+pip install vidmeta
 ```
 
 **Why GStreamer is required:**
@@ -26,16 +25,16 @@ uv pip install -e .
 
 ```bash
 # Generate video matching sample_video.mpg frame 812
-uv run generate-klv-video sample_video
+vidmeta-generate sample_video
 
 # List available scenarios
-uv run generate-klv-video --list
+vidmeta-generate --list
 
 # Generate all scenarios
-uv run generate-klv-video --all
+vidmeta-generate --all
 
 # Custom output and size
-uv run generate-klv-video moving --output videos/my_test.ts --width 256 --height 256
+vidmeta-generate moving --output videos/my_test.ts --width 256 --height 256
 ```
 
 ## Running Example Scripts
@@ -44,8 +43,8 @@ uv run generate-klv-video moving --output videos/my_test.ts --width 256 --height
 # Remove corner points from video (keeps frame center lat/lon)
 uv run python examples/remove_corner_points.py
 
-# Remove corner points AND make frame center lat/lon unparseable by KWIVER
-# (writes 0-byte length for tags 23-24, causing KWIVER to omit frame_center field)
+# Remove corner points AND make frame center lat/lon unparseable
+# (writes 0-byte length for tags 23-24)
 uv run python examples/remove_corners_and_frame_center_latlon.py
 ```
 
@@ -53,10 +52,8 @@ Available scenarios: `sample_video`, `stationary`, `moving`, `high_altitude`, `m
 
 Each generates:
 
-- `.mpg` file - MPEG-TS video with embedded KLV data stream
-- `.klv` file - Raw KLV packets (use this for KWIVER testing)
-
-**Note**: The KLV data is embedded in the MPEG-TS stream, but FFmpeg cannot replicate the full KLVA codec tagging found in professional tools. For reliable KWIVER testing, use the separate `.klv` file which contains properly formatted MISB ST 0601 packets.
+- `.ts` file - MPEG-TS video with embedded KLV data stream
+- `.klv` file - Raw KLV packets for KWIVER testing (MISB ST 0601 format)
 
 ## Python API
 
@@ -64,7 +61,7 @@ Unified API with backend selection (see `examples/example_gstreamer.py` for comp
 
 ```python
 from datetime import datetime, timezone
-from klv_test_videos.video_builder import build_klv_video
+from vidmeta.video_builder import build_klv_video
 
 # Define metadata for each frame
 metadata = [
@@ -119,13 +116,13 @@ Modify KLV metadata in existing videos (like `sample_video.mpg`) while preservin
 
 ```bash
 # Modify metadata using JSON file
-uv run modify-klv-video input.mpg -o output.ts --overrides changes.json
+vidmeta-modify input.mpg -o output.ts --overrides changes.json
 
 # Modify single field on command line
-uv run modify-klv-video input.mpg -o output.ts --frame 5 --set latitude=37.5
+vidmeta-modify input.mpg -o output.ts --frame 5 --set latitude=37.5
 
 # Modify multiple frames and fields
-uv run modify-klv-video input.mpg -o output.ts \
+vidmeta-modify input.mpg -o output.ts \
   --frame 0 --set latitude=37.7 longitude=-122.4 \
   --frame 10 --set altitude=2000 heading=180
 ```
@@ -143,7 +140,7 @@ uv run modify-klv-video input.mpg -o output.ts \
 ### Python API
 
 ```python
-from klv_test_videos.video_modifier import modify_video_metadata
+from vidmeta.video_modifier import modify_video_metadata
 
 # Define metadata changes for specific frames
 metadata_overrides = {
